@@ -1,0 +1,66 @@
+:root {
+  --input-padding-x: 1.5rem;
+  --input-padding-y: 0.75rem;
+}
+
+
+body{
+	--webkit-scroll-behaviour: smooth !important;
+	scroll-behavior: smooth !important;
+	
+}
+
+.nounderline {
+  text-decoration: none !important
+}
+
+p.elegantstyle {
+ color: #000000bf;
+ font-size: 14px; 
+ font-weight:lighter;
+}
+
+span.smallstyle {
+ color: black;
+ font-size: 15px; 
+}
+
+hr.newstyle {
+    border: 0;
+    height: 0;
+    border-top: 1px solid rgba(0, 0, 0, 0.1);
+    border-bottom: 1px solid rgba(255, 255, 255, 0.3);
+}
+
+.ui-menu {
+	position: relative;
+	list-style: none;
+	background-color: white;
+	border-radius: 18px;
+	z-index:10;
+	box-shadow: 5px 0px 8px white;
+	width: 214px;
+	line-height: 200%;
+	font-size: 18px;
+	padding: 15px 0;
+	border: solid 1px grey;
+}
+
+.ui-menu .ui-menu-item {
+	margin: none;
+	padding-left: 15px;
+    padding-right:10px;
+}
+.ui-menu .ui-menu-item:hover {
+	background-color: darkgrey;
+}
+
+/* Global responsive table rules: horizontal scroll + stacked fallback */
+@media (max-width: 768px) {
+	.table-responsive { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+	.table thead { display: none; }
+	.table tbody, .table tr { display: block; width: 100%; }
+	.table tr { margin-bottom: 12px; border: 1px solid rgba(0,0,0,0.04); border-radius: 8px; padding: 10px; }
+	.table td { display: flex; justify-content: space-between; padding: 6px 10px; border: none; }
+	.table td::before { content: attr(data-label); font-weight: 600; margin-right: 8px; color: #333; }
+}

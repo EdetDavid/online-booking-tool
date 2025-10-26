@@ -1,0 +1,203 @@
+{% extends 'demo/staff/base.html' %}
+{% load static %}
+{% block title %}Approved Flights{% endblock %}
+{% block content %}
+    {% load static %}
+    {% load humanize %}
+    <link rel="stylesheet"
+          href="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css">
+    <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;600&display=swap"
+          rel="stylesheet">
+    <link rel="stylesheet"
+          href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.3/css/all.min.css" />
+    <style>
+        .table-container {
+            background: #ffffff;
+            border-radius: 12px;
+            overflow: hidden;
+            box-shadow: 0 8px 16px rgba(0, 0, 0, 0.1);
+            padding: 30px;
+            margin-top: 30px;
+        }
+
+        h1 {
+            font-size: 32px;
+            margin-bottom: 25px;
+            color: #007bff;
+            text-align: center;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 20px;
+        }
+
+        thead {
+            background: #007bff;
+            color: #ffffff;
+        }
+
+        th, td {
+            padding: 15px;
+            text-align: left;
+        }
+
+        th {
+            font-weight: bold;
+            border-bottom: 3px solid #e1e1e1;
+            font-size: 18px;
+        }
+
+        td {
+            border-bottom: 2px solid #e1e1e1;
+            font-size: 16px;
+            text-align: center;
+        }
+
+        tr:nth-child(even) {
+            background-color: #f9f9f9;
+        }
+
+        .btn-approve {
+            padding: 10px 20px;
+            border: none;
+            border-radius: 5px;
+            font-size: 14px;
+            cursor: pointer;
+            background-color: #28a745;
+            color: white;
+        }
+
+        .btn-back {
+            display: inline-block;
+            background-color: #007bff;
+            color: #ffffff;
+            padding: 12px 25px;
+            border-radius: 8px;
+            font-size: 16px;
+            text-decoration: none;
+            margin-bottom: 20px;
+            transition: background-color 0.3s ease, transform 0.3s ease;
+            box-shadow: 0 4px 8px rgba(0, 123, 255, 0.2);
+        }
+
+        .btn-back:hover {
+            background-color: #0056b3;
+            transform: translateY(-3px);
+        }
+
+        .profile-img {
+            width: 50px;
+            height: 50px;
+            border-radius: 50%;
+            object-fit: cover;
+        }
+
+        .status-approved {
+            background-color: #28a745;
+            color: #fff;
+            font-weight: bold;
+            padding: 5px 10px;
+            border-radius: 5px;
+            display: inline-flex;
+            align-items: center;
+        }
+
+        .status-pending {
+            background-color: #ffdd00; /* Bright yellow */
+            color: #000; /* Black text for contrast */
+            font-weight: bold;
+            padding: 5px 10px;
+            border-radius: 5px;
+            display: inline-flex;
+            align-items: center;
+        }
+
+        .status-pending::before {
+            content: "\26A0"; /* Unicode character for warning sign */
+            font-size: 18px;
+            margin-right: 5px;
+        }
+
+
+        
+        /* Phones (max-width: 768px) */
+        @media (max-width: 768px) {
+            h1 {
+                font-size: 1.75rem; /* Adjust headline for mobile */
+            }
+
+            th, td {
+                padding: 0.5rem; /* Reduce padding */
+                font-size: 0.875rem;
+            }
+
+            .profile-image {
+                width: 50px;
+                height: 50px;
+            }
+
+            .btn-approve, .btn-disapprove {
+                padding: 0.4rem 0.8rem; /* Smaller buttons */
+                font-size: 0.75rem;
+            }
+
+            /* Add Scroll on Mobile */
+            .table-container {
+                overflow-x: auto; /* Horizontal scroll for small screens */
+                width:  80vw !important;
+            }
+
+            table {
+                min-width: 500px; /* Ensure the table doesn't shrink too much */
+                
+            }
+        }
+
+    </style>
+</head>
+<body>
+    <div class="container">
+        <a href="{% url 'admin_dashboard' %}" class="btn-back">Back to Dashboard</a>
+        <div class="table-container">
+            <h1>Approved Flights</h1>
+            <div class="table-responsive">
+            <table class="table table-bordered table-striped">
+                <thead>
+                    <tr>
+                        <th>Origin</th>
+                        <th>Destination</th>
+                        <th>Departure Date</th>
+                        <th>Return Date</th>
+                        <th>Passenger Count</th>
+                        <th>Travel Class</th>
+                        <th>Price</th>
+                        <th>Status</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for flight in approved_flights %}
+                        <tr>
+                            <td data-label="Origin">{{ flight.origin }}</td>
+                            <td data-label="Destination">{{ flight.destination }}</td>
+                            <td data-label="Departure Date">{{ flight.departure_date }}</td>
+                            <td data-label="Return Date">{{ flight.return_date }}</td>
+                            <td data-label="Passenger Count">{{ flight.passenger_count }}</td>
+                            <td data-label="Travel Class">{{ flight.travel_class }}</td>
+                            <td data-label="Price">₦ {{ flight.price|floatformat:0|intcomma }}</td>
+                            <td data-label="Status" class="status-approved">Approved</td>
+                        </tr>
+                    {% empty %}
+                        <tr>
+                            <td colspan="8">No approved flights available.</td>
+                        </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+            </div>
+        </div>
+    </div>
+</body>
+</html>
+{% endblock %}

@@ -1,0 +1,91 @@
+{% extends 'demo/thrive_admin/base.html' %}
+{% load static %}
+
+{% block content %}
+<div class="container">
+    <div class="update-price-card">
+        <h1 class="text-center">Update Price Increment</h1>
+        <form method="POST" class="form">
+            {% csrf_token %}
+            <div class="form-group">
+                <label for="increment_value" class="form-label">Price Increment Value</label>
+                <input type="number" name="increment_value" id="increment_value" value="{{ increment_value }}" class="form-control" required>
+            </div>
+            <div class="text-center mt-4">
+                <button type="submit" class="btn-submit">Update</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<style>
+    body {
+        background-color: #f4f7f6;
+        font-family: 'Arial', sans-serif;
+        color: #333;
+    }
+
+    .container {
+        max-width: 600px;
+        margin: 50px auto;
+    }
+
+    .update-price-card {
+        background-color: #ffffff;
+        border-radius: 15px;
+        box-shadow: 0px 10px 25px rgba(0, 0, 0, 0.1);
+        padding: 40px;
+        border: 1px solid #ddd;
+    }
+
+    h1 {
+        color: #007bff;
+        font-size: 26px;
+        margin-bottom: 20px;
+        text-align: center;
+    }
+
+    .form-label {
+        font-size: 18px;
+        color: #333;
+        margin-bottom: 10px;
+        display: block;
+    }
+
+    .form-control {
+        width: 100%;
+        padding: 12px 15px;
+        font-size: 16px;
+        border-radius: 8px;
+        border: 1px solid #ccc;
+        transition: all 0.3s ease;
+    }
+
+    .form-control:focus {
+        border-color: #007bff;
+        outline: none;
+        box-shadow: 0 0 10px rgba(0, 123, 255, 0.2);
+    }
+
+    .btn-submit {
+        background-color: #28a745;
+        color: white;
+        padding: 12px 30px;
+        border-radius: 8px;
+        border: none;
+        margin-top: 10px;
+        font-size: 16px;
+        cursor: pointer;
+        transition: background-color 0.3s ease;
+    }
+
+    .btn-submit:hover {
+        background-color: #218838;
+    }
+
+    .text-center {
+        text-align: center;
+    }
+</style>
+
+{% endblock %}

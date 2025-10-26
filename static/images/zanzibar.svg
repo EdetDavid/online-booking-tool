@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="900" viewBox="0 0 1600 900">
+  <defs>
+    <linearGradient id="g1" x1="0" x2="0" y1="0" y2="1">
+      <stop offset="0%" stop-color="#00c6ff"/>
+      <stop offset="100%" stop-color="#0072ff"/>
+    </linearGradient>
+    <linearGradient id="g2" x1="0" x2="1" y1="0" y2="1">
+      <stop offset="0%" stop-color="#ffd57e"/>
+      <stop offset="100%" stop-color="#ff8a00"/>
+    </linearGradient>
+  </defs>
+  <rect width="100%" height="100%" fill="url(#g1)" />
+  <!-- sun -->
+  <circle cx="1250" cy="150" r="90" fill="url(#g2)" opacity="0.95" />
+  <!-- sea -->
+  <rect y="420" width="1600" height="480" fill="#0077be" opacity="0.9" />
+  <!-- sand -->
+  <rect y="520" width="1600" height="380" fill="#f2c97d" />
+  <!-- simple palm silhouette -->
+  <g transform="translate(300,480) scale(1.2)" fill="#1b2b21">
+    <rect x="36" y="-120" width="12" height="140" rx="6" />
+    <path d="M42  -110 C 10 -150, -20 -150,  -40 -130 C -20 -120, 0 -100, 42 -110 Z" />
+    <path d="M42  -90 C 80 -130, 110 -130, 130 -110 C 110 -100, 80 -90, 42 -90 Z" />
+    <path d="M42  -70 C 20 -90, -10 -90, -30 -70 C -10 -60, 20 -50, 42 -70 Z" />
+  </g>
+  <!-- title text -->
+  <text x="60" y="120" font-family="Arial, Helvetica, sans-serif" font-size="64" fill="#fff" font-weight="700">Zanzibar</text>
+  <text x="60" y="190" font-family="Arial, Helvetica, sans-serif" font-size="28" fill="#ffffffcc">Tropical beaches & spice islands</text>
+</svg>

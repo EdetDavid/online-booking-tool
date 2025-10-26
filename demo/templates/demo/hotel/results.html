@@ -1,0 +1,376 @@
+{% load static %}
+{% load humanize %}
+<!DOCTYPE html>
+<html lang="en">
+    <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Online Booking Tool - Hotel Booking</title>
+    <link rel="icon" href="{% static 'images/online_booking_tool.png' %}">
+        <link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/4.0.0/css/bootstrap.min.css"
+              integrity="sha384-Gn5384xqQ1aoWXA+058RXPxPg6fy4IWvTNh0E263XmFcJlSAwiGgFAW/dAiS6JXm" crossorigin="anonymous">
+        <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.4/css/all.min.css">
+    <link rel="icon" href="{% static 'images/online_booking_tool.png' %}" type="image/x-icon">
+        <style>
+            :root {
+                --primary-color: #1a237e;
+                --secondary-color: #283593;
+                --accent-color: #0d47a1;
+                --background-color: rgba(245, 246, 250, 0.95);
+                --card-background: #ffffff;
+                --text-primary: #263238;
+                --text-secondary: #455a64;
+            }
+
+            body {
+                font-family: 'Arial', 'Helvetica Neue', sans-serif;
+                background: linear-gradient(rgba(0, 0, 0, 0.7), rgba(0, 0, 0, 0.7)),
+                            url('{% static "images/corporate-background.jpg" %}') no-repeat center center fixed;
+                background-size: cover;
+                color: var(--text-primary);
+                min-height: 100vh;
+            }
+
+            .navbar {
+                background-color: rgba(255, 255, 255, 0.95); /* Changed to white background */
+                padding: 15px 0;
+                box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+            }
+        
+            .navbar-brand {
+                color: var(--primary-color) !important; /* Changed to dark color */
+                font-weight: 700;
+                font-size: 1.5rem;
+                letter-spacing: 1px;
+                display: flex;
+                align-items: center;
+            }
+        
+            .navbar-brand img {
+                margin-right: 10px;
+            }
+        
+            /* Add these new styles for better navbar appearance */
+            .navbar .container {
+                padding: 0 15px;
+            }
+        
+            .navbar-toggler {
+                border-color: var(--primary-color);
+            }
+        
+            .navbar-toggler-icon {
+                background-image: url("data:image/svg+xml,%3csvg viewBox='0 0 30 30' xmlns='http://www.w3.org/2000/svg'%3e%3cpath stroke='rgba(26, 35, 126, 1)' stroke-width='2' stroke-linecap='round' stroke-miterlimit='10' d='M4 7h22M4 15h22M4 23h22'/%3e%3c/svg%3e");
+            }
+        
+            .nav-link {
+                color: var(--primary-color) !important;
+                font-weight: 500;
+                padding: 0.5rem 1rem;
+                transition: color 0.3s ease;
+            }
+        
+            .nav-link:hover {
+                color: var(--secondary-color) !important;
+            }
+
+            .container {
+                margin-top: 40px;
+                margin-bottom: 40px;
+                background-color: rgba(255, 255, 255, 0.95);
+                padding: 30px;
+                border-radius: 20px;
+                box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
+            }
+
+            .header-section {
+                background: linear-gradient(135deg, var(--primary-color), var(--secondary-color));
+                padding: 40px 0;
+                margin-bottom: 40px;
+                border-radius: 10px;
+                box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);
+                border: 1px solid rgba(255, 255, 255, 0.1);
+            }
+
+            .header-section h3 {
+                color: white;
+                font-weight: 700;
+                margin-bottom: 15px;
+                text-transform: uppercase;
+                letter-spacing: 1px;
+            }
+
+            .header-section p {
+                color: rgba(255, 255, 255, 0.9);
+                font-size: 1.1rem;
+                font-weight: 300;
+            }
+
+            .card {
+                border: none;
+                border-radius: 10px;
+                overflow: hidden;
+                transition: transform 0.3s ease, box-shadow 0.3s ease;
+                margin-bottom: 25px;
+                background: var(--card-background);
+                box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
+                border: 1px solid rgba(0, 0, 0, 0.05);
+            }
+
+            .card:hover {
+                transform: translateY(-5px);
+                box-shadow: 0 8px 25px rgba(0, 0, 0, 0.15);
+            }
+
+            .card-header {
+                background: linear-gradient(45deg, var(--primary-color), var(--secondary-color));
+                padding: 25px;
+                border: none;
+            }
+
+            .price {
+                font-size: 32px;
+                font-weight: 700;
+                color: white;
+                letter-spacing: -0.5px;
+            }
+
+            .price-label {
+                font-size: 14px;
+                color: rgba(255, 255, 255, 0.8);
+                display: block;
+                text-transform: uppercase;
+                letter-spacing: 1px;
+            }
+
+            .show-rooms-button {
+                background-color: var(--accent-color);
+                color: white;
+                border: none;
+                padding: 12px 30px;
+                border-radius: 5px;
+                font-weight: 600;
+                text-transform: uppercase;
+                letter-spacing: 1px;
+                font-size: 0.9rem;
+                transition: all 0.3s ease;
+            }
+
+            .show-rooms-button:hover {
+                background-color: #1565c0;
+                transform: translateY(-2px);
+                box-shadow: 0 5px 15px rgba(0, 0, 0, 0.2);
+                color: white;
+                text-decoration: none;
+            }
+
+            .card-body {
+                padding: 30px;
+            }
+
+            .hotel-name {
+                color: var(--primary-color);
+                font-size: 1.5rem;
+                font-weight: 700;
+                margin-bottom: 15px;
+                letter-spacing: -0.5px;
+            }
+
+            .hotel-address {
+                color: var(--text-secondary);
+                font-size: 1rem;
+                display: flex;
+                align-items: start;
+                line-height: 1.6;
+            }
+
+            .hotel-address i {
+                margin-right: 10px;
+                color: var(--secondary-color);
+                margin-top: 4px;
+            }
+
+            .amenities {
+                margin-top: 20px;
+                padding-top: 20px;
+                border-top: 1px solid rgba(0, 0, 0, 0.1);
+            }
+
+            .amenity-badge {
+                background-color: rgba(26, 35, 126, 0.1);
+                color: var(--primary-color);
+                padding: 8px 15px;
+                border-radius: 5px;
+                font-size: 0.85rem;
+                margin-right: 10px;
+                margin-bottom: 10px;
+                display: inline-block;
+                font-weight: 500;
+                border: 1px solid rgba(26, 35, 126, 0.2);
+            }
+
+            .amenity-badge i {
+                color: var(--accent-color);
+                margin-right: 5px;
+            }
+
+            .corporate-footer {
+                text-align: center;
+                padding: 30px 0;
+                color: rgba(255, 255, 255, 0.8);
+                background-color: rgba(26, 35, 126, 0.95);
+                margin-top: 50px;
+            }
+
+            .corporate-footer p {
+                margin-bottom: 5px;
+                font-size: 0.9rem;
+            }
+
+            .no-hotels-found {
+                background-color: white;
+                padding: 40px;
+                border-radius: 10px;
+                text-align: center;
+                box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1);
+            }
+
+            .no-hotels-found i {
+                color: var(--secondary-color);
+                margin-bottom: 20px;
+            }
+
+            @media (max-width: 768px) {
+                .container {
+                    margin-top: 20px;
+                    padding: 15px;
+                }
+                
+                .header-section {
+                    padding: 25px 15px;
+                }
+                
+                .price {
+                    font-size: 28px;
+                }
+                
+                .show-rooms-button {
+                    padding: 10px 20px;
+                    font-size: 0.8rem;
+                }
+            }
+        </style>
+    </head>
+    <body>
+                <nav class="navbar navbar-expand-lg fixed-top" role="navigation" aria-label="Main navigation">
+                <a class="navbar-brand" href="{% url 'home' %}">
+                <img src="{% static 'images/online_booking_tool.png' %}" width="40" height="40" alt="Online Booking Tool Logo" />
+                Online Booking Tool
+            </a>
+            <button class="navbar-toggler " type="button" data-toggle="collapse" data-target="#navbarNav">
+                <span class="navbar-toggler-icon">
+                    <i class="fas fa-bars text-dark"> </i>
+                </span>
+            </button>
+            <div class="collapse navbar-collapse" id="navbarNav">
+    <ul class="navbar-nav mx-auto" role="menubar">
+                    <li class="nav-item" role="none">
+                        <a class="nav-link focus-outline" role="menuitem" href="#" aria-label="Open cart" data-toggle="modal" data-target="#cartModal">
+                            <i class="fas fa-shopping-cart" aria-hidden="true"></i>
+                        </a>
+                    </li>
+                </ul>
+                <!-- Services as navbar links -->
+                <ul class="navbar-nav mx-auto navbar-services d-none d-lg-flex" style="gap:18px;align-items:center;margin-left:20px;">
+                    <li class="nav-item service-link active"><a class="nav-link" href="{% url 'home' %}"><i class="fas fa-plane"></i> Flight</a></li>
+                    <li class="nav-item service-link"><a class="nav-link" href="{% url 'hotel' %}"><i class="fas fa-hotel"></i> Stays</a></li>
+                    <li class="nav-item service-link"><a class="nav-link" href="{% url 'coming_soon' %}"><i class="fas fa-car"></i> Rides</a></li>
+                    <li class="nav-item service-link"><a class="nav-link" href="{% url 'coming_soon' %}"><i class="fas fa-umbrella-beach"></i> Holidays</a></li>
+                    <li class="nav-item service-link"><a class="nav-link" href="{% url 'coming_soon' %}"><i class="fas fa-suitcase-rolling"></i> Extras</a></li>
+                </ul>
+                <!-- Login Button or Username Display -->
+                <ul class="navbar-nav ml-auto">
+                    {% if user.is_authenticated %}
+                        <li class="nav-item dropdown">
+                            <a class="nav-link username-text dropdown-toggle"
+                                 href="#"
+                                 id="userDropdown"
+                                 role="button"
+                                 data-toggle="dropdown"
+                                 aria-haspopup="true"
+                                 aria-expanded="false">Signed in as: {{ user.username }}</a>
+                            <div class="dropdown-menu dropdown-menu-right username-dropdown"
+                                     aria-labelledby="userDropdown">
+                                <a class="dropdown-item" href="{% get_profile_url user %}">Profile</a>
+                                <a class="dropdown-item" href="{% url 'logout' %} ">Logout</a>
+                            </div>
+                        </li>
+                    {% else %}
+                        <li class="nav-item">
+                            <a class="btn login-btn focus-outline" href="{% url 'login' %}" role="button" aria-label="Login">Login</a>
+                        </li>
+                    {% endif %}
+                </ul>
+            </div>
+        </nav>
+
+        <div class="container">
+            <div class="header-section text-center">
+                <h3><i class="fas fa-hotel mr-2"></i>Hotels in {{ origin }}</h3>
+                <p>
+                    <i class="far fa-calendar-alt mr-2"></i>
+                    Check-in: {{ departureDate }}
+                    {% if returnDate %}
+                        <span class="mx-2">|</span>
+                        Check-out: {{ returnDate }}
+                    {% endif %}
+                </p>
+            </div>
+
+            {% if response %}
+                <div class="row">
+                    {% for r, hotel in response %}
+                        <div class="col-md-6">
+                            <div class="card">
+                                <div class="card-header d-flex justify-content-between align-items-center">
+                                    <div>
+                                        <span class="price-label">Starting from</span>
+                                        <span class="price">${{ r.price }}</span>
+                                    </div>
+                                    <a href="{% url 'rooms_per_hotel' r.hotelID departureDate returnDate %}" 
+                                       class="show-rooms-button">
+                                        <i class="fas fa-door-open mr-2"></i>Show Rooms
+                                    </a>
+                                </div>
+                                <div class="card-body">
+                                    <h4 class="hotel-name">{{ r.name }}</h4>
+                                    <p class="hotel-address">
+                                        <i class="fas fa-map-marker-alt"></i>
+                                        <span>{{ r.address }}</span>
+                                    </p>
+                                    <div class="amenities">
+                                        <span class="amenity-badge"><i class="fas fa-wifi"></i>Free WiFi</span>
+                                        <span class="amenity-badge"><i class="fas fa-parking"></i>Parking</span>
+                                        <span class="amenity-badge"><i class="fas fa-swimming-pool"></i>Pool</span>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    {% endfor %}
+                </div>
+            {% else %}
+                <div class="no-hotels-found">
+                    <i class="fas fa-search-location fa-3x"></i>
+                    <h4>No hotels found in this location</h4>
+                    <p class="text-muted">Please try modifying your search criteria</p>
+                </div>
+            {% endif %}
+        </div>
+
+    
+
+        <script src="https://code.jquery.com/jquery-3.2.1.slim.min.js"></script>
+        <script src="https://cdnjs.cloudflare.com/ajax/libs/popper.js/1.12.9/umd/popper.min.js"></script>
+        <script src="https://maxcdn.bootstrapcdn.com/bootstrap/4.0.0/js/bootstrap.min.js"></script>
+    </body>
+</html>

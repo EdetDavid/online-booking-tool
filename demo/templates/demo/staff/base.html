@@ -1,0 +1,337 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}Admin Dashboard{% endblock %}</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
+    <link rel="icon" href="{% static 'images/online_booking_tool.png' %}" type="image/x-icon">
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            font-family: 'Roboto', 'Arial', sans-serif;
+        }
+
+        body {
+            background-color: #f0f2f5;
+            color: #333;
+            display: flex;
+        }
+
+        .main-container {
+            display: flex;
+            flex: 1;
+            transition: margin-left 0.3s ease-in-out;
+        }
+
+        .sidebar {
+            background-color: #1a2942;
+            color: #fff;
+            min-height: 100vh;
+            height: 100% !important;
+            width: 280px;
+            transition: all 0.3s ease-in-out;
+            position: fixed;
+            z-index: 100;
+            padding: 0;
+            overflow-y: auto;
+            box-shadow: 2px 0 5px rgba(0,0,0,0.1);
+        }
+
+        .sidebar h2 {
+            font-size: 24px;
+            font-weight: 600;
+            margin-bottom: 30px;
+            text-align: center;
+            padding: 15px 0;
+            border-bottom: 1px solid #2c3e50;
+        }
+
+        .sidebar a {
+            color: #ecf0f1;
+            padding: 15px 25px;
+            text-decoration: none;
+            font-size: 16px;
+            display: flex;
+            align-items: center;
+            transition: all 0.3s ease;
+            margin-bottom: 5px;
+        }
+
+        .sidebar a:hover,
+        .sidebar a.active {
+            background-color: #2c3e50;
+        }
+
+        .sidebar a i {
+            margin-right: 15px;
+            font-size: 18px;
+        }
+
+        /* Dropdown styles */
+        .dropdown {
+            position: relative;
+            display: block;
+        }
+
+        .dropdown-toggle {
+            color: #ecf0f1;
+            padding: 15px 25px;
+            text-decoration: none;
+            font-size: 16px;
+            display: flex;
+            align-items: center;
+            transition: all 0.3s ease;
+            margin-bottom: 5px;
+            cursor: pointer;
+        }
+
+        .dropdown-toggle:hover {
+            background-color: #2c3e50;
+        }
+
+        .dropdown-toggle i {
+            margin-right: 15px;
+            font-size: 18px;
+        }
+
+        .dropdown-content {
+            display: none;
+            background-color: #1a2942;
+        }
+
+        .dropdown-content a {
+            padding: 15px 25px 15px 55px;
+            margin-bottom: 0;
+        }
+
+        .dropdown-content a:hover {
+            background-color: #2c3e50;
+        }
+
+        .dropdown.active .dropdown-content {
+            display: block;
+        }
+
+        .main-content {
+            flex-grow: 1;
+            padding: 20px;
+            margin-left: 280px;
+            transition: margin-left 0.3s ease-in-out;
+        }
+
+        .navbar {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 15px 30px;
+            background-color: #ffffff;
+            border-radius: 10px;
+            color: #333;
+            margin-bottom: 30px;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+            flex-wrap: wrap;
+        }
+
+        .navbar h1 {
+            font-size: 20px;
+            font-weight: 500;
+            margin-bottom: 10px;
+        }
+
+        .navbar a {
+            color: white;
+            text-decoration: none;
+            font-size: 16px;
+            padding: 10px 20px;
+            background-color: #e74c3c;
+            border-radius: 25px;
+            transition: all 0.3s ease;
+        }
+
+        .navbar a:hover {
+            background-color: #c0392b;
+            transform: translateY(-2px);
+            
+        }
+
+        .navbar-right {
+            display: flex;
+            align-items: center;
+            justify-content: flex-end;
+            flex-grow: 1;
+            gap: 15px;
+            flex-wrap: wrap;
+        }
+
+        .content-card {
+            background: white;
+            border-radius: 10px;
+            padding: 25px;
+            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1);
+            margin-bottom: 30px;
+            transition: all 0.3s ease;
+        }
+
+        .content-card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 6px 20px rgba(0, 0, 0, 0.15);
+        }
+
+        .sidebar-toggle {
+            display: none;
+            position: fixed;
+            top: 20px;
+            left: 20px;
+            padding: 10px;
+            background: #1a2942;
+            color: #fff;
+            border-radius: 5px;
+            cursor: pointer;
+            z-index: 101;
+            transition: all 0.3s ease;
+        }
+
+        .sidebar-toggle:hover {
+            background-color: #2c3e50;
+        }
+
+        @media (max-width: 768px) {
+            .sidebar {
+                transform: translateX(-100%);
+                width: 250px;
+            }
+
+            .sidebar.open {
+                transform: translateX(0);
+            }
+
+            .main-content {
+                margin-left: 0;
+            }
+
+            .sidebar-toggle {
+                display: block;
+            }
+
+            .navbar {
+                flex-direction: column;
+                align-items: flex-start;
+            }
+
+            .navbar h1 {
+                text-align: center;
+                width: 100%;
+                margin-bottom: 10px;
+            }
+
+            .navbar-right {
+                justify-content: center;
+                width: 100%;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="main-container">
+        <!-- Sidebar Section -->
+        <div class="sidebar">
+            <h2>Staff Dashboard</h2>
+            <a class="my-2 text-decoration-none" href="{% url 'profile' %}" class="{% if request.resolver_match.url_name == 'profile' %}active{% endif %}">
+                <i class="fas fa-user-circle"></i>Profile
+            </a>
+            
+            <!-- Dropdown Menu -->
+            <div class="dropdown">
+                <div class="dropdown-toggle">
+                    <i class="fas fa-plane"></i>
+                    <span>Book Now</span>
+                </div>
+                <div class="dropdown-content">
+                    <a class="text-decoration-none" href="{% url 'home' %}">
+                        <i class="fas fa-plane-departure"></i>
+                        Flight
+                    </a>
+                    <a class="text-decoration-none" href="{% url 'hotel' %}">
+                        <i class="fas fa-hotel"></i>
+                        Hotel
+                    </a>
+                </div>
+            </div>
+
+            <a class="my-2 text-decoration-none" href="{% url 'pending_flights' %}" class="{% if request.resolver_match.url_name == 'pending_flights' %}active{% endif %}">
+                <i class="fas fa-plane"></i>Pending Flights
+            </a>
+            <a class="my-2 text-decoration-none" href="{% url 'approved_flights' %}" class="{% if request.resolver_match.url_name == 'approved_flights' %}active{% endif %}">
+                <i class="fas fa-plane"></i>Approved Flights
+            </a>
+        </div>
+
+        <!-- Main Content Section -->
+        <div class="main-content">
+            <!-- Sidebar Toggle Button -->
+            <div class="sidebar-toggle" title="Toggle Sidebar">
+                <i class="fas fa-bars"></i>
+            </div>
+            <div class="navbar">
+                <h1>Welcome, {{ request.user.username }}</h1>
+                <div class="navbar-right">
+                    <a href="{% url 'logout' %}">Logout</a>
+                </div>
+            </div>
+            <div class="content-section">
+                <div class="content-card">
+                    {% block content %}{% endblock %}
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const sidebar = document.querySelector('.sidebar');
+        const sidebarToggle = document.querySelector('.sidebar-toggle');
+        const mainContainer = document.querySelector('.main-container');
+
+        // Dropdown functionality
+        document.querySelectorAll('.dropdown-toggle').forEach(dropdownToggle => {
+            dropdownToggle.addEventListener('click', (e) => {
+                e.preventDefault();
+                const dropdown = dropdownToggle.parentElement;
+                dropdown.classList.toggle('active');
+            });
+        });
+
+        sidebarToggle.addEventListener('click', () => {
+            sidebar.classList.toggle('open');
+            mainContainer.classList.toggle('sidebar-closed');
+        });
+
+        // Close sidebar when clicking outside
+        document.addEventListener('click', (event) => {
+            if (!sidebar.contains(event.target) && !sidebarToggle.contains(event.target)) {
+                sidebar.classList.remove('open');
+                mainContainer.classList.add('sidebar-closed');
+            }
+        });
+
+        // Show the toggle button only when the screen width is less than 768px
+        function updateToggleVisibility() {
+            if (window.innerWidth < 768) {
+                sidebarToggle.style.display = 'block';
+                sidebar.classList.remove('open');
+                mainContainer.classList.add('sidebar-closed');
+            } else {
+                sidebarToggle.style.display = 'none';
+                sidebar.classList.remove('open');
+                mainContainer.classList.remove('sidebar-closed');
+            }
+        }
+
+        window.addEventListener('resize', updateToggleVisibility);
+        updateToggleVisibility(); 
+    </script>
+</body>
+</html>

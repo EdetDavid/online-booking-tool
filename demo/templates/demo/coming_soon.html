@@ -1,0 +1,31 @@
+{% load static %}
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
+  <title>Coming Soon</title>
+  <link rel="icon" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.4/svgs/solid/plane-departure.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.4/css/all.min.css">
+    <link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css">
+    <link rel="stylesheet" href="{% static 'demo/css/home_custom.css' %}">
+    <style>
+      .coming-card { max-width:760px; margin:80px auto; padding:36px; border-radius:12px; text-align:center; background: linear-gradient(180deg,#fff,#fbfbfd); box-shadow:0 20px 40px rgba(0,0,0,0.08);} 
+      .coming-emoji { font-size:72px; }
+      a.btn-home { margin-top:18px; }
+    </style>
+  </head>
+  <body>
+    <nav class="navbar navbar-expand-lg fixed-top">
+  <a class="navbar-brand" href="{% url 'home' %}"><i class="fas fa-plane-departure" style="font-size:36px;color:#007bff;margin-right:8px;"></i> Online Booking Tool</a>
+    </nav>
+    <main role="main" class="container">
+      <div class="coming-card">
+        <div class="coming-emoji">🚧</div>
+        <h1 class="mt-3">Coming Soon</h1>
+        <p class="lead">This feature is on our roadmap — we're working to bring it to you shortly.</p>
+        <a class="btn btn-primary btn-lg btn-home" href="{% url 'home' %}">Return Home</a>
+      </div>
+    </main>
+  </body>
+</html>

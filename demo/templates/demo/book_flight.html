@@ -1,0 +1,141 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Your Booking Confirmation</title>
+
+  <!-- Bootstrap CSS -->
+  <link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css" integrity="sha384-dG5GVdO8bl93+7Z7E0Nf5ftWZnR6gkAaCZ9YlM0zzE68l9Rkg0g5ogCz0P+Az8C1" crossorigin="anonymous">
+
+  <!-- Project CSS -->
+  <link rel="stylesheet" href="{% static 'demo/style.css' %}">
+
+  <style>
+    /* Small, local styles kept for this standalone template */
+    body { font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif; background:#f8f9fa; color:#495057; }
+    .container { margin-top:30px; max-width:900px; }
+    .card { border-radius:10px; border:1px solid #dee2e6; box-shadow:0 2px 4px rgba(0,0,0,0.08); margin-bottom:20px; }
+    .card-header { background:#007bff; color:#fff; border-bottom:1px solid #0056b3; font-weight:600; }
+    .card-body { padding:20px; }
+    .price { font-size:1.25rem; font-weight:700; color:#007bff; }
+    .hr-style { border:0; border-top:2px solid #007bff; margin:20px 0; }
+    .alert { border-radius:8px; }
+  </style>
+</head>
+
+<body>
+  {# This file is intentionally standalone. If you have a project base template, consider changing this to:
+     {% extends 'demo/staff/base.html' %}
+     {% block content %} ... {% endblock %}
+     #}
+
+  <div class="container">
+
+    {% comment %} Messages (rendered as list) {% endcomment %}
+    {% if messages %}
+      <div class="alert alert-danger" role="alert">
+        <ul class="mb-0">
+          {% for message in messages %}
+            <li>{{ message }}</li>
+          {% endfor %}
+        </ul>
+      </div>
+    {% endif %}
+
+    {# Booking details block - can be embedded inside a base's content block if needed #}
+    {% block content %}
+
+      {% if response %}
+        <div class="booking-details">
+          {% for r in response %}
+            <h3 class="text-center mb-4">Your Booking Confirmation</h3>
+
+            <div class="card">
+              <div class="card-header">Booking Information</div>
+              <div class="card-body">
+                <p>Status: <strong class="text-danger">{{ r.confirmed }}</strong></p>
+                <p>Booking Reference: <strong class="text-danger">{{ r.reference }}</strong></p>
+                <p>Document Issued At: <strong>{{ r.created }}</strong></p>
+                <p>Price: <span class="price">${{ r.price }}</span></p>
+
+                {% if r.0firstFlightDepartureDate %}
+                  <div class="card mt-3">
+                    <div class="card-header">Departure Flight</div>
+                    <div class="card-body">
+                      <p>Departure Date: {{ r.0departureDate }}</p>
+
+                      <div class="card-text">
+                        <h4>
+                          <img src="{% if r.0firstFlightAirline == 'B6' %}{% static 'images/jetblue.svg' %}{% else %}{{ r.0firstFlightAirlineLogo }}{% endif %}"
+                               alt="{{ r.0firstFlightAirline }}"
+                               width="30" height="30"
+                               style="margin-right:10px; vertical-align:middle;"
+                               onerror="this.onerror=null;this.src='{% static 'images/jetblue.svg' %}';">
+                          {{ r.0firstFlightDepartureDate }} {{ r.0firstFlightDepartureAirport }} → {{ r.0firstFlightArrivalAirport }} {{ r.0firstFlightArrivalDate }}
+                        </h4>
+
+                        {% if r.0secondFlightDepartureAirport %}
+                          <h4>
+                            <img src="{% if r.0secondFlightAirline == 'B6' %}{% static 'images/jetblue.svg' %}{% else %}{{ r.0secondFlightAirlineLogo }}{% endif %}"
+                                 alt="{{ r.0secondFlightAirline }}"
+                                 width="30" height="30"
+                                 style="margin-right:10px; vertical-align:middle;"
+                                 onerror="this.onerror=null;this.src='{% static 'images/jetblue.svg' %}';">
+                            {{ r.0secondFlightDepartureDate }} {{ r.0secondFlightDepartureAirport }} → {{ r.0secondFlightArrivalAirport }} {{ r.0secondFlightArrivalDate }}
+                          </h4>
+                        {% endif %}
+
+                      </div>
+
+                      {% if r.1firstFlightDepartureAirport %}
+                        <hr class="hr-style">
+                        <p>Return Flight Date: {{ r.1departureDate }}</p>
+
+                        <div class="card-text">
+                          <h4>
+                            <img src="{% if r.1firstFlightAirline == 'B6' %}{% static 'images/jetblue.svg' %}{% else %}{{ r.1firstFlightAirlineLogo }}{% endif %}"
+                                 alt="{{ r.1firstFlightAirline }}"
+                                 width="30" height="30"
+                                 style="margin-right:10px; vertical-align:middle;"
+                                 onerror="this.onerror=null;this.src='{% static 'images/jetblue.svg' %}';">
+                            {{ r.1firstFlightDepartureDate }} {{ r.1firstFlightDepartureAirport }} → {{ r.1firstFlightArrivalAirport }} {{ r.1firstFlightArrivalDate }}
+                          </h4>
+
+                          {% if r.1secondFlightDepartureAirport %}
+                            <h4>
+                              <img src="{% if r.1secondFlightAirline == 'B6' %}{% static 'images/jetblue.svg' %}{% else %}{{ r.1secondFlightAirlineLogo }}{% endif %}"
+                                   alt="{{ r.1secondFlightAirline }}"
+                                   width="30" height="30"
+                                   style="margin-right:10px; vertical-align:middle;"
+                                   onerror="this.onerror=null;this.src='{% static 'images/jetblue.svg' %}';">
+                              {{ r.1secondFlightDepartureDate }} {{ r.1secondFlightDepartureAirport }} → {{ r.1secondFlightArrivalAirport }} {{ r.1secondFlightArrivalDate }}
+                            </h4>
+                          {% endif %}
+
+                        </div>
+                      {% endif %}
+
+                    </div>
+                  </div>
+                {% endif %}
+
+              </div>
+            </div>
+
+          {% endfor %}
+        </div>
+      {% else %}
+        <p class="text-center">No booking details available.</p>
+      {% endif %}
+
+    {% endblock content %}
+
+  </div>
+
+  <!-- Optional JS (kept from original) -->
+  <script src="https://code.jquery.com/jquery-3.4.1.js" integrity="sha256-WpOohJOqMqqyKL9FccASB9O0KwACQJpFTUBLTYOVvVU=" crossorigin="anonymous"></script>
+  <script src="https://code.jquery.com/ui/1.12.1/jquery-ui.js" integrity="sha256-T0Vest3yCU7pafRw9r+settMBX6JkKN06dqBnpQ8d30=" crossorigin="anonymous"></script>
+</body>
+</html>

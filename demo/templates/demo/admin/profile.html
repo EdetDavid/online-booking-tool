@@ -1,0 +1,214 @@
+{% extends 'demo/admin/base.html' %}
+{% load static %}
+{% block title %}Profile{% endblock %}
+{% block content %}
+    {% load static %}
+    <link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css">
+    <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;600&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.3/css/all.min.css" />
+    <style>
+        .profile-container {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            padding: 5%;
+            max-width: 600px; 
+            width: 90%;
+            margin: 5% auto;
+            background: #ffffff;
+            border-radius: 12px;
+            box-shadow: 0 8px 16px rgba(0, 0, 0, 0.1);
+        }
+
+        .profile-header {
+            text-align: center;
+            margin-bottom: 30px;
+            width: 100%;
+        }
+
+        .profile-picture {
+            width: 150px;
+            height: 150px;
+            border-radius: 50%;
+            object-fit: cover;
+            border: 6px solid #007bff;
+            box-shadow: 0 6px 12px rgba(0, 0, 0, 0.2);
+            margin-bottom: 20px;
+            transition: transform 0.3s;
+        }
+
+        .profile-picture:hover {
+            transform: scale(1.05);
+        }
+
+        .profile-info {
+            width: 100%;
+            margin-bottom: 30px;
+        }
+
+        .profile-info h2 {
+            font-size: 2rem;
+            color: #007bff;
+            font-weight: 600;
+            margin-bottom: 20px;
+        }
+
+        .info-item {
+            display: flex;
+            flex-direction: column;
+            margin-bottom: 15px; 
+            padding: 10px;
+            border-radius: 8px;
+            background-color: #f8f9fa;
+            transition: background-color 0.3s;
+        }
+
+        .info-item:hover {
+            background-color: #e2e6ea;
+        }
+
+        .info-item label {
+            font-weight: 500;
+            color: #343a40;
+            margin-bottom: 5px;
+        }
+
+        .info-item span {
+            color: #495057;
+        }
+
+        .profile-form {
+            width: 100%;
+            padding: 20px;
+            border-radius: 12px;
+            background: #f9f9f9;
+            box-shadow: 0 6px 12px rgba(0, 0, 0, 0.1);
+        }
+
+        .form-group {
+            margin-bottom: 20px;
+        }
+
+        .custom-file-label::after {
+            content: "Browse";
+        }
+
+        .btn-primary {
+            padding: 12px 25px;
+            background-color: #007bff;
+            color: #ffffff;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: background-color 0.3s, transform 0.3s;
+        }
+
+        .btn-primary:hover {
+            background-color: #0056b3;
+            transform: translateY(-2px);
+        }
+
+        .error-message {
+            color: #dc3545;
+            margin-top: 8px;
+            font-weight: 500;
+        }
+
+        .current-picture img {
+            width: 100px;
+            height: 100px;
+            border-radius: 50%;
+            object-fit: cover;
+            border: 3px solid #007bff;
+            margin-right: 15px;
+        }
+
+        @media (min-width: 768px) {
+            .profile-container {
+                padding: 40px;
+            }
+
+            .profile-info h2 {
+                font-size: 2.5rem;
+            }
+
+            .info-item {
+                flex-direction: row;
+                align-items: center;
+            }
+
+            .info-item label {
+                margin-right: 15px;
+                width: 120px;
+                margin-bottom: 0;
+            }
+        }
+    </style>
+    <!-- Profile Section -->
+    <div class="profile-container">
+        <div class="profile-header">
+            {% if user.profile.profile_picture %}
+                <img src="{{ user.profile.profile_picture.url }}"
+                     alt="Profile Picture"
+                     class="profile-picture">
+            {% else %}
+                <img src="{% static 'demo/default_profile_picture.jpg' %}"
+                     alt="Default Profile Picture"
+                     class="profile-picture">
+            {% endif %}
+            <h2>{{ user.username }}'s Profile</h2>
+        </div>
+        <div class="profile-info">
+            <div class="info-item">
+                <label for="username">Username:</label>
+                <span>{{ user.username }}</span>
+            </div>
+            <div class="info-item">
+                <label for="email">Email:</label>
+                <span>{{ user.email }}</span>
+            </div>
+            <div class="info-item">
+                <label for="first_name">First Name:</label>
+                <span>{{ user.first_name }}</span>
+            </div>
+            <div class="info-item">
+                <label for="last_name">Last Name:</label>
+                <span>{{ user.last_name }}</span>
+            </div>
+            <div class="info-item">
+                <label for="phone">Phone:</label>
+                <span>{{ user.phone }}</span>
+            </div>
+        </div>
+        <!-- Profile Picture Update Form -->
+        <form method="POST"
+              enctype="multipart/form-data"
+              class="profile-form"
+              action="{% url 'admin_update_profile_picture' %}">
+            {% csrf_token %}
+            <div class="form-group">
+                <label for="profile_picture" class="form-label">Update Profile Picture:</label>
+                <div class="custom-file">
+                    <input type="file"
+                           name="profile_picture"
+                           id="profile_picture"
+                           class="custom-file-input"
+                           onchange="updateFileName()">
+                    <label class="custom-file-label" for="profile_picture">Choose file</label>
+                </div>
+                {% if error_message %}<div class="error-message">{{ error_message }}</div>{% endif %}
+            </div>
+            <button type="submit" class="btn btn-primary">Upload</button>
+        </form>
+    </div>
+    <!-- Bootstrap JS & Custom Script -->
+    <script src="https://code.jquery.com/jquery-3.5.1.slim.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@4.5.2/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        function updateFileName() {
+            const input = document.getElementById('profile_picture');
+            const fileName = input.files[0].name;
+            document.querySelector('.custom-file-label').textContent = fileName;
+        }
+    </script>
+{% endblock %}

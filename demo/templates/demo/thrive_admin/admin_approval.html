@@ -1,0 +1,179 @@
+{% extends 'demo/thrive_admin/base.html' %}
+
+{% block content %}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Pending Thrive Admin Approvals</title>
+
+
+    <style>
+        /* General Reset and Font Setup */
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            font-family: 'Arial', sans-serif;
+        }
+        
+        body {
+            background-color: #f4f7f6;
+            color: #333;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+
+        .table-container {
+            background: #ffffff;
+            border-radius: 12px;
+            overflow: hidden;
+            box-shadow: 0 8px 16px rgba(0, 0, 0, 0.1);
+            padding: 30px;
+            margin-top: 30px;
+        }
+
+        h1 {
+            font-size: 32px;
+            margin-bottom: 25px;
+            color: #007bff;
+            text-align: center;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 20px;
+        }
+
+        thead {
+            background: #007bff;
+            color: #ffffff;
+        }
+
+        th, td {
+            padding: 15px;
+            text-align: left;
+        }
+
+        th {
+            font-weight: bold;
+            border-bottom: 3px solid #e1e1e1;
+            font-size: 18px;
+        }
+
+        td {
+            border-bottom: 2px solid #e1e1e1;
+            font-size: 16px;
+        }
+
+        tr:nth-child(even) {
+            background-color: #f9f9f9;
+        }
+
+        .profile-image {
+            width: 80px;
+            height: 80px;
+            border-radius: 50%;
+            object-fit: cover;
+            border: 3px solid #007bff;
+        }
+        
+        .btn-approve, .btn-disapprove {
+            padding: 10px 20px;
+            border: none;
+            border-radius: 5px;
+            font-size: 14px;
+            cursor: pointer;
+        }
+
+        .btn-approve {
+            background-color: #28a745;
+            color: white;
+            margin-right: 10px;
+        }
+
+        .btn-disapprove {
+            background-color: #dc3545;
+            color: white;
+        }
+
+        .btn-back {
+            display: inline-block;
+            background-color: #007bff;
+            color: #ffffff;
+            padding: 12px 25px;
+            border-radius: 8px;
+            font-size: 16px;
+            text-decoration: none;
+            margin-bottom: 20px;
+            transition: background-color 0.3s ease, transform 0.3s ease;
+            box-shadow: 0 4px 8px rgba(0, 123, 255, 0.2);
+        }
+
+        .btn-back:hover {
+            background-color: #0056b3;
+            transform: translateY(-3px);
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <a href="{% url 'update_price_increment' %}" class="btn-back">Back to Dashboard</a>
+        <div class="table-container">
+            <h1>Pending Thrive Admin Approvals</h1>
+            {% if pending_admins %}
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Profile Picture</th>
+                            
+                            <th>First Name</th>
+                            <div class="table-responsive">
+                            <table class="table table-bordered table-striped">
+                                <thead>
+                                    <tr>
+                                        <th>Profile Picture</th>
+                                        <th>First Name</th>
+                                        <th>Last Name</th>
+                                        <th>Email</th>
+                                        <th>Phone</th>
+                                        <th>Actions</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {% for admin in pending_admins %}
+                                        <tr>
+                                            <td data-label="Profile Picture">
+                                                {% if admin.admin.profile.profile_picture %}
+                                                    <img src="{{ admin.admin.profile.profile_picture.url }}" alt="{{ admin.admin.username }}'s Profile" class="profile-image">
+                                                {% else %}
+                                                    <img src="https://www.gravatar.com/avatar/?d=mp&s=200" alt="{{ admin.admin.username }}'s Profile" class="profile-image">
+                                                {% endif %}
+                                            </td>
+                                            <td data-label="First Name">{{ admin.first_name }}</td>
+                                            <td data-label="Last Name">{{ admin.last_name }}</td>
+                                            <td data-label="Email">{{ admin.admin.email }}</td>
+                                            <td data-label="Phone">{{ admin.phone }}</td>
+                                            <td data-label="Actions">
+                                                <form method="POST">
+                                                    {% csrf_token %}
+                                                    <input type="hidden" name="admin_id" value="{{ admin.id }}">
+                                                    <button type="submit" name="action" value="approve" class="btn-approve">Approve</button>
+                                                    <button type="submit" name="action" value="disapprove" class="btn-disapprove">Disapprove</button>
+                                                </form>
+                                            </td>
+                                        </tr>
+                                    {% endfor %}
+                                </tbody>
+                            </table>
+                            </div>
+</body>
+</html>
+{% endblock %}

@@ -1,0 +1,248 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="en">
+    <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>Flight Booking Confirmation</title>
+        <style>
+        body {
+            font-family: Arial, sans-serif;
+            line-height: 1.6;
+            color: #333;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f4f4f4;
+        }
+        .container {
+            background-color: #ffffff;
+            border-radius: 5px;
+            padding: 30px;
+            box-shadow: 0 0 10px rgba(0,0,0,0.1);
+        }
+        h1, h2 {
+            color: #2c3e50;
+        }
+        h1 {
+            border-bottom: 2px solid #3498db;
+            padding-bottom: 10px;
+        }
+        ul {
+            list-style-type: none;
+            padding: 0;
+        }
+        li {
+            margin-bottom: 10px;
+        }
+        strong {
+            color: #2980b9;
+        }
+        .container {
+            margin-top: 30px;
+            max-width: 900px;
+        }
+        .card {
+            border-radius: 10px;
+            border: 1px solid #dee2e6;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            margin-bottom: 20px;
+        }
+        .card-header {
+            background-color: #007bff;
+            color: white;
+            border-bottom: 1px solid #0056b3;
+            font-size: 1.25rem;
+            font-weight: bold;
+            border-radius: 10px 10px 0 0;
+        }
+        .card-body {
+            padding: 20px;
+        }
+        .text-danger {
+            color: #dc3545;
+        }
+        .price {
+            font-size: 1.5rem;
+            font-weight: bold;
+            color: #007bff;
+        }
+        .card-text h4 {
+            font-size: 1.1rem;
+            margin: 10px 0;
+        }
+        .card-text img {
+            max-height: 30px;
+            margin-right: 10px;
+            vertical-align: middle;
+        }
+        .alert {
+            border-radius: 10px;
+        }
+        .alert-danger {
+            background-color: #f8d7da;
+            color: #721c24;
+        }
+        .modal-body {
+            background-color: #ffffff;
+            padding: 20px;
+            border-radius: 10px;
+        }
+        .booking-details {
+            margin-bottom: 30px;
+        }
+        .booking-details h3 {
+            color: #007bff;
+            margin-bottom: 20px;
+            text-align: center;
+        }
+        .btn {
+            border-radius: 20px;
+            padding: 10px 20px;
+            text-transform: uppercase;
+            font-weight: bold;
+            color: #ffffff;
+            background-color: #007bff;
+            border: none;
+        }
+        .btn:hover {
+            background-color: #0056b3;
+        }
+        .hr-style {
+            border: none;
+            border-top: 2px solid #007bff;
+            margin: 20px 0;
+        }
+        .signature {
+            margin-top: 30px;
+            font-style: italic;
+        }
+        </style>
+    </head>
+    <body>
+        <div class="container">
+            <h1>Flight Order from Online Booking Tool</h1>
+            {% comment %} <p>Dear {{ request.user.first_name request.user.last_name }},</p>
+        <p>Dear {{ request.user.first_name request.user.last_name }},</p>
+            <p>Your flight has been successfully booked. Here are the details:</p> {% endcomment %}
+            <h2>Flight Information:</h2>
+            <ul>
+                <li>
+                    <strong>Name:</strong> {{ first_name }} {{ last_name }}
+                </li>
+                <li>
+                    <strong>Email:</strong> {{ email }}
+                </li>
+                <li>
+                    <strong>Phone:</strong> {{ phone }}
+                </li>
+                <li>
+                    <strong>Origin:</strong> {{ origin }}
+                </li>
+                <li>
+                    <strong>Destination:</strong> {{ destination }}
+                </li>
+                <li>
+                    <strong>Departure Date:</strong> {{ departure_date }}
+                </li>
+                {% if return_date %}
+                    <li>
+                        <strong>Return Date:</strong> {{ return_date }}
+                    </li>
+                {% endif %}
+                <li>
+                    <strong>Travel Class:</strong> {{ travel_class }}
+                </li>
+            </ul>
+            {% if response %}
+                <h2>Booking Details:</h2>
+                <div class="booking-details">
+                    {% for r in response %}
+                        <h3>Your Booking Confirmation</h3>
+                        <div class="card">
+                            <div class="card-header">Booking Information</div>
+                            <div class="card-body">
+                                <p>
+                                    Status: <span class="text-danger">{{ r.confirmed }}</span>
+                                </p>
+                                <p>
+                                    Booking Reference: <span class="text-danger">{{ r.reference }}</span>
+                                </p>
+                                <p>
+                                    Document Issued At: <b>{{ r.created }}</b>
+                                </p>
+                                <p>
+                                    Price: <span class="price">${{ r.price }}</span>
+                                </p>
+                                {% if r.0firstFlightDepartureDate %}
+                                    <div class="card">
+                                        <div class="card-header">Departure Flight</div>
+                                        <div class="card-body">
+                                            <p>Departure Date: {{ r.0departureDate }}</p>
+                                            <div class="card-text">
+                                                <h4>
+                                                    <img src="{% if r.0firstFlightAirline == 'B6' %}{% static 'images/jetblue.svg' %}{% else %}{{ r.0firstFlightAirlineLogo }}{% endif %}"
+                                              alt="{{ r.0firstFlightAirline }}"
+                                              data-airline-code="{{ r.0firstFlightAirline }}"
+                                              width="30" height="30"
+                                                         onerror="this.onerror=null;this.src='{% static 'images/jetblue.svg' %}';">
+                                                    {{ r.0firstFlightDepartureDate }} {{ r.0firstFlightDepartureAirport }}
+                                                    → {{ r.0firstFlightArrivalAirport }} {{ r.0firstFlightArrivalDate }}
+                                                </h4>
+                                                {% if r.0secondFlightDepartureAirport %}
+                                                    <h4>
+                                                        <img src="{% if r.0secondFlightAirline == 'B6' %}{% static 'images/jetblue.svg' %}{% else %}{{ r.0secondFlightAirlineLogo }}{% endif %}"
+                                                 alt="{{ r.0secondFlightAirline }}"
+                                                 data-airline-code="{{ r.0secondFlightAirline }}"
+                                                 width="30" height="30"
+                                                             onerror="this.onerror=null;this.src='{% static 'images/jetblue.svg' %}';">
+                                                        {{ r.0secondFlightDepartureDate }} {{ r.0secondFlightDepartureAirport }}
+                                                        → {{ r.0secondFlightArrivalAirport }} {{ r.0secondFlightArrivalDate }}
+                                                    </h4>
+                                                {% endif %}
+                                            </div>
+                                            {% if r.1firstFlightDepartureAirport %}
+                                                <hr class="hr-style">
+                                                <p>Return Flight Date: {{ r.1departureDate }}</p>
+                                                <div class="card-text">
+                                                    <h4>
+                                                        <img src="{% if r.1firstFlightAirline == 'B6' %}{% static 'images/jetblue.svg' %}{% else %}{{ r.1firstFlightAirlineLogo }}{% endif %}"
+                                                 alt="{{ r.1firstFlightAirline }}"
+                                                 data-airline-code="{{ r.1firstFlightAirline }}"
+                                                 width="30" height="30"
+                                                             onerror="this.onerror=null;this.src='{% static 'images/jetblue.svg' %}';">
+                                                        {{ r.1firstFlightDepartureDate }} {{ r.1firstFlightDepartureAirport }}
+                                                        → {{ r.1firstFlightArrivalAirport }} {{ r.1firstFlightArrivalDate }}
+                                                    </h4>
+                                                    {% if r.1secondFlightDepartureAirport %}
+                                                        <h4>
+                                                            <img src="{% if r.1secondFlightAirline == 'B6' %}{% static 'images/jetblue.svg' %}{% else %}{{ r.1secondFlightAirlineLogo }}{% endif %}"
+                                                    alt="{{ r.1secondFlightAirline }}"
+                                                    data-airline-code="{{ r.1secondFlightAirline }}"
+                                                    width="30" height="30"
+                                                                 onerror="this.onerror=null;this.src='{% static 'images/jetblue.svg' %}';">
+                                                            {{ r.1secondFlightDepartureDate }} {{ r.1secondFlightDepartureAirport }}
+                                                            → {{ r.1secondFlightArrivalAirport }} {{ r.1secondFlightArrivalDate }}
+                                                        </h4>
+                                                    {% endif %}
+                                                </div>
+                                            {% endif %}
+                                        </div>
+                                    </div>
+                                {% endif %}
+                            </div>
+                        </div>
+                    {% endfor %}
+                </div>
+            {% endif %}
+            <p>Thank you for choosing our service. Have a great trip!</p>
+            <div class="signature">
+                <p>
+                    Best regards,
+                    <br>
+                    Your Flight Booking Team
+                </p>
+            </div>
+        </div>
+    </body>
+</html>

@@ -1,0 +1,99 @@
+{% load static %}
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/4.0.0/css/bootstrap.min.css"
+          integrity="sha384-Gn5384xqQ1aoWXA+058RXPxPg6fy4IWvTNh0E263XmFcJlSAwiGgFAW/dAiS6JXm" crossorigin="anonymous">
+    <link rel="stylesheet" type="text/css" href="{% static 'demo/style.css' %}">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.4/css/all.min.css">
+    <link rel="icon" href="{% static 'images/online_booking_tool.png' %}" type="image/x-icon">
+    <meta charset="UTF-8">
+        <title>Online Booking Tool - Hotel Booking</title>
+    <style>
+        .hotel-header {
+            background: linear-gradient(135deg, #1e3c72 0%, #2a5298 100%);
+            color: white;
+            padding: 2rem;
+            margin-bottom: 2rem;
+        }
+        .room-card {
+            transition: transform 0.3s ease;
+            border: none;
+            box-shadow: 0 2px 15px rgba(0,0,0,0.1);
+        }
+        .room-card:hover {
+            transform: translateY(-5px);
+        }
+        .price-tag {
+            font-size: 1.5rem;
+            font-weight: bold;
+            color: #2a5298;
+        }
+        .book-btn {
+            background-color: #f0ad4e;
+            border: none;
+            padding: 0.5rem 2rem;
+            transition: all 0.3s ease;
+        }
+        .book-btn:hover {
+            background-color: #ec971f;
+            transform: scale(1.05);
+        }
+        .date-info {
+            font-size: 1.1rem;
+            color: #6c757d;
+        }
+    </style>
+</head>
+<body>
+
+<div class="hotel-header text-center">
+    <h2 class="mb-3">{{ name }}</h2>
+    <div class="date-info">
+        <i class="far fa-calendar-alt mr-2"></i>{{ origin }}
+        <br>
+        {{ departureDate }}
+        {% if returnDate %}
+        <span class="mx-2">&#10594&#10596</span>
+        {{ returnDate }}
+        {% endif %}
+    </div>
+</div>
+
+<div class="container">
+    <h3 class="text-center mb-4">Available Rooms</h3>
+    
+    <div class="row justify-content-center">
+        {% for r in response %}
+        <div class="col-md-8 mb-4">
+            <div class="room-card card">
+                <div class="card-header bg-white d-flex justify-content-between align-items-center py-3">
+                    <span class="price-tag">${{ r.price }}</span>
+                    <a href="{% url 'book_hotel' r.offerID%}" class="book-btn btn btn-warning">
+                        <i class="fas fa-bookmark mr-2"></i>Book Now
+                    </a>
+                </div>
+                <div class="card-body">
+                    <div class="room-description">
+                        <i class="fas fa-bed mr-2 text-muted"></i>
+                        {{ r.description }}
+                    </div>
+                </div>
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+</div>
+
+<script src="https://code.jquery.com/jquery-3.2.1.slim.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/popper.js/1.12.9/umd/popper.min.js"></script>
+<script src="https://maxcdn.bootstrapcdn.com/bootstrap/4.0.0/js/bootstrap.min.js"></script>
+<script>
+    $(document).ready(function(){
+        $('[data-toggle="tooltip"]').tooltip();
+    });
+</script>
+
+</body>
+</html>

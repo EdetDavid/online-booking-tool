@@ -1,0 +1,141 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="en">
+    <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>Login</title>
+        <link rel="stylesheet" href="{% static 'demo/auth.css' %}">
+        <link rel="icon"
+              href="{% static 'images/online_booking_tool.png' %}"
+              type="image/x-icon">
+        <style>
+        /* Auth container with a centered layout */
+        .auth-container {
+            height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            background-color: #f0f0f0;
+        }
+
+        /* Form styling */
+        .auth-form {
+            background-color: #fff;
+            padding: 30px;
+            border-radius: 10px;
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+            width: 100%;
+            max-width: 400px;
+            text-align: center;
+        }
+
+        h2 {
+            margin-bottom: 20px;
+            color: #333;
+        }
+
+        .btn {
+            width: 100%;
+            padding: 10px;
+            background-color: #007bff;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            margin-top: 20px;
+        }
+
+        .btn:hover {
+            background-color: #0056b3;
+        }
+
+        /* Error message styling */
+        .error-message {
+            color: red;
+            margin-bottom: 15px;
+            font-weight: bold;
+        }
+
+        /* Account switcher section */
+        .account-switcher {
+            margin-top: 20px;
+            padding-top: 10px;
+            border-top: 1px solid #ddd;
+        }
+
+        .account-switcher p {
+            margin: 10px 0;
+            font-size: 14px;
+            color: #555;
+        }
+
+        /* Link styling */
+        .account-switcher a {
+            color: #007bff;
+            text-decoration: none;
+            font-weight: bold;
+        }
+
+        .account-switcher a:hover {
+            text-decoration: underline;
+        }
+
+        /* Icons to differentiate account types */
+        .account-icon {
+            margin-right: 5px;
+            color: #007bff;
+        }
+
+        /* Align the icons and links side by side */
+        .account-link {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin: 10px 0;
+        }
+
+        /* Small visual separator between account types */
+        .separator {
+            margin: 15px 0;
+            color: #888;
+            font-size: 12px;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+        </style>
+    </head>
+    <body>
+        <div class="auth-container">
+            <div class="auth-form">
+                <h2>Login as a Staff</h2>
+                <!-- Message block for displaying error or success messages -->
+                {% if messages %}
+                    <div>
+                        {% for message in messages %}<div class="error-message">{{ message }}</div>{% endfor %}
+                    </div>
+                {% endif %}
+                <form method="POST">
+                    {% csrf_token %}
+                    {{ form.as_p }}
+                    <button type="submit" class="btn">Login</button>
+                </form>
+                <!-- Account switcher section -->
+                <div class="account-switcher">
+                    <p>
+                        Don't have an account? <a href="{% url 'register' %}">Register here</a>
+                    </p>
+                    <div class="separator">OR</div>
+                    <div class="account-link">
+                        <span class="account-icon">👔</span>
+                        <a href="{% url 'admin_login' %}">Login as an Admin</a>
+                    </div>
+                    <div class="account-link">
+                        <span class="account-icon">🏆</span>
+                        <a href="{% url 'thrive_admin_login' %}">Login as Thrive Admin</a>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </body>
+</html>

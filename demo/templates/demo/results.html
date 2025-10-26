@@ -1,0 +1,384 @@
+{% load static %}
+{% load humanize %}
+<!-- Load the humanize template tag library -->
+<!DOCTYPE html>
+<html lang="en">
+    <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>Flight Results</title>
+    <link rel="icon" href="{% static 'images/online_booking_tool.png' %}">
+        <link rel="stylesheet"
+              href="https://maxcdn.bootstrapcdn.com/bootstrap/4.0.0/css/bootstrap.min.css"
+              integrity="sha384-Gn5384xqQ1aoWXA+058RXPxPg6fy4IWvTNh0E263XmFcJlSAwiGgFAW/dAiS6JXm"
+              crossorigin="anonymous">
+        <link rel="stylesheet" type="text/css" href="{% static 'demo/style.css' %}">
+    <link rel="stylesheet" type="text/css" href="{% static 'demo/results_filters.css' %}">
+<style>
+        body {
+            font-family: 'Arial', sans-serif;
+            background-color: #f7f9fc;
+        }
+
+        .container {
+            margin-top: 30px;
+        }
+
+        .card-header {
+            background-color: #007bff;
+            color: white;
+            font-size: 20px;
+        }
+
+        .card-body {
+            padding: 15px;
+        }
+
+        .price {
+            font-size: 24px;
+            font-weight: bold;
+            color: #28a745;
+        }
+
+        .table thead th {
+            background-color: #007bff;
+            color: white;
+            font-weight: bold;
+        }
+
+        .table tbody tr:hover {
+            background-color: #f1f1f1;
+        }
+
+    /*    .book-button {
+            background-color: #28a745;
+            border: none;
+            color: white;
+            font-weight: bold;
+            padding: 10px 20px;
+            border-radius: 5px;
+            transition: background-color 0.3s ease;
+        }
+
+        .book-button:hover {
+            background-color: #218838;
+            color: white;
+            transform: scale(1.05);
+        }
+
+
+        */
+
+        .book-button {
+            background: linear-gradient(90deg,#ff8a00,#ff5e00);
+            border: none;
+            color: #fff;
+            font-weight: 700;
+            padding: 10px 20px;
+            border-radius: 20px;
+            box-shadow: 0 10px 30px rgba(255,94,0,0.12);
+            transition: transform .12s ease, box-shadow .12s ease, opacity .12s ease;
+        }
+
+        .book-button:hover {
+            opacity: 0.95;
+            transform: translateY(-1px);
+        }
+
+        .tooltip-inner {
+            font-size: 14px;
+        }
+
+        @media (max-width: 768px) {
+            .table-responsive {
+                overflow-x: auto;
+            }
+            .card-body {
+                padding: 10px;
+            }
+            .book-button {
+                padding: 8px 15px;
+                font-size: 14px;
+            }
+        }
+
+        /* Center align button in table cell */
+        .text-center-vertical {
+            vertical-align: middle;
+        }
+
+        .loading-message {
+            font-size: 20px;
+            text-align: center;
+            color: #007bff;
+        }
+        /* Toast container positioning moved out of inline styles */
+        #toast-container { position: fixed; top: 1rem; right: 1rem; z-index: 20000; }
+</style>
+    </head>
+    <body>
+    <!-- Toast container -->
+    <div id="toast-container" aria-live="polite" aria-atomic="true"></div>
+        <div class="container">
+            <div class="row mb-4">
+                <div class="col-md-12">
+                    <div class="text-center mb-4">
+                        <h3 class="mb-2">{{ origin }} ✈ {{ destination }}</h3>
+                        <p class="mb-0">
+                            {{ departureDate }}
+                            {% if returnDate %}<span class="text-info">↔</span> {{ returnDate }}{% endif %}
+                        </p>
+                        {% if tripPurpose %}
+                            <h4 class="mt-3">
+                                Flying for <span class="text-danger">{{ tripPurpose }}</span> purposes
+                            </h4>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+            {% if response %}
+                <div class="row mb-3">
+                    <div class="col-md-3">
+                        <div class="filters-panel p-3 bg-white shadow-sm">
+                            <h5 class="mb-3">Refine search results</h5>
+                            <div class="filter-section mb-3">
+                                <label for="sortSelect" class="font-weight-bold">Sort</label>
+                                <select id="sortSelect" class="form-control">
+                                    <option value="best">Best</option>
+                                    <option value="cheapest">Cheapest</option>
+                                    <option value="earliest">Earliest departure</option>
+                                </select>
+                            </div>
+
+                            <div class="filter-section mb-3">
+                                <label class="font-weight-bold">Stops</label>
+                                <select id="stopsFilter" class="form-control">
+                                    <option value="any">Any</option>
+                                    <option value="0">Non‑stop</option>
+                                    <option value="1">1 stop</option>
+                                    <option value="2">2+ stops</option>
+                                </select>
+                            </div>
+
+                            <div class="filter-section mb-3">
+                                <label class="font-weight-bold">Price (₦)</label>
+                                <div class="d-flex">
+                                    <input id="minPrice" type="number" class="form-control mr-2" placeholder="Min">
+                                    <input id="maxPrice" type="number" class="form-control" placeholder="Max">
+                                </div>
+                            </div>
+
+                            <div class="filter-section mb-3">
+                                <label class="font-weight-bold">Departure time</label>
+                                <select id="departureTime" class="form-control">
+                                    <option value="any">Any</option>
+                                    <option value="morning">Morning (04:00–11:59)</option>
+                                    <option value="afternoon">Afternoon (12:00–17:59)</option>
+                                    <option value="evening">Evening (18:00–21:59)</option>
+                                    <option value="night">Night (22:00–03:59)</option>
+                                </select>
+                            </div>
+
+                            <div class="filter-section mb-3">
+                                <label class="font-weight-bold">Airlines</label>
+                                <div id="airlinesContainer" class="airlines-list small"></div>
+                            </div>
+
+                            <div class="filter-section mb-3">
+                                <label class="font-weight-bold">Trip Type</label>
+                                <select id="filterTripType" class="form-control">
+                                    <option value="any">Any</option>
+                                    <option value="one-way">One-Way</option>
+                                    <option value="round-trip">Round-Trip</option>
+                                    <option value="multi-city">Multi-City</option>
+                                </select>
+                            </div>
+
+                            <div class="filter-section mb-3">
+                                <label class="font-weight-bold">Cabin Class</label>
+                                <select id="filterCabinClass" class="form-control">
+                                    <option value="any">Any</option>
+                                    <option value="economy">Economy</option>
+                                    <option value="premium_economy">Premium Economy</option>
+                                    <option value="business">Business</option>
+                                    <option value="first">First</option>
+                                </select>
+                            </div>
+
+                            <div class="filter-section mb-3">
+                                <label class="font-weight-bold">Passengers</label>
+                                <input id="filterPassengers" type="number" min="1" value="1" class="form-control" />
+                            </div>
+
+                            <div class="d-flex justify-content-between">
+                                <button id="applyFilters" class="btn btn-primary">Apply</button>
+                                <button id="clearFilters" class="btn btn-link">Clear</button>
+                            </div>
+                            <div class="mt-3 text-muted small">Showing <span id="resultsCount">-</span> results</div>
+                        </div>
+                    </div>
+                    <div class="col-md-9">
+                <div class="table-responsive">
+                    <table class="table table-bordered table-striped">
+                        <thead>
+                            <tr>
+                                <th>Departure</th>
+                                <th>Return</th>
+                                <th>Price</th>
+                                <th>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for r, flight in response %}
+                {% if r.0firstFlightDepartureDate %}
+                    {% if r.0secondFlightDepartureAirport %}
+                    <tr data-price="{{ r.price|floatformat:2 }}" data-stops="1" data-flight-id="flight_{{ forloop.counter }}">
+                    {% else %}
+                    <tr data-price="{{ r.price|floatformat:2 }}" data-stops="0" data-flight-id="flight_{{ forloop.counter }}">
+                    {% endif %}
+                    {{ flight|json_script:"flight_"|add:forloop.counter }}
+                                        <td data-label="Departure">
+                                            <div>
+                                                <p>
+                                          {% with jetblue_svg="images/jetblue.svg" %}
+                                          <img src="{% if r.0firstFlightAirline == 'B6' %}{% static jetblue_svg %}{% else %}{{ r.0firstFlightAirlineLogo }}{% endif %}"
+                                              alt="{{ r.0firstFlightAirline }} logo"
+                                              data-airline-code="{{ r.0firstFlightAirline }}"
+                                              class="img-fluid"
+                                              width="30" height="30"
+                                              onerror="this.onerror=null;this.src='{% static jetblue_svg %}';" />
+                                          {% endwith %}
+                                                    {{ r.0firstFlightDepartureDate }} {{ r.0firstFlightDepartureAirport }}
+                                                    <span class="text-info"
+                                                          data-toggle="tooltip"
+                                                          title="{{ r.0firstFlightArrivalDuration }}">→</span>
+                                                    {{ r.0firstFlightArrivalAirport }} {{ r.0firstFlightArrivalDate }}
+                                                </p>
+                                                                {% if r.0secondFlightDepartureAirport %}
+                                                                <p>
+                                                         {% with jetblue_svg="images/jetblue.svg" %}
+                                                         <img src="{% if r.0secondFlightAirline == 'B6' %}{% static jetblue_svg %}{% else %}{{ r.0secondFlightAirlineLogo }}{% endif %}"
+                                                             alt="{{ r.0secondFlightAirline }} logo"
+                                                             data-airline-code="{{ r.0secondFlightAirline }}"
+                                                             class="img-fluid"
+                                                             width="30" height="30"
+                                                             onerror="this.onerror=null;this.src='{% static jetblue_svg %}';" />
+                                                         {% endwith %}
+                                                                    {{ r.0secondFlightDepartureDate }} {{ r.0secondFlightDepartureAirport }}
+                                                                    <span class="text-info"
+                                                                          data-toggle="tooltip"
+                                                                          title="{{ r.0secondFlightArrivalDuration }}">→</span>
+                                                                    {{ r.0secondFlightArrivalAirport }} {{ r.0secondFlightArrivalDate }}
+                                                                </p>
+                                                                Connection duration: {{ r.0stop_time }}
+                                                                <br />
+                                                                {% endif %}
+                                            </div>
+                                        </td>
+                                        <td data-label="Return">
+                                            {% if r.1firstFlightDepartureAirport %}
+                                                <div>
+                                                    <p>
+                                             {% with jetblue_svg="images/jetblue.svg" %}
+                                             <img src="{% if r.1firstFlightAirline == 'B6' %}{% static jetblue_svg %}{% else %}{{ r.1firstFlightAirlineLogo }}{% endif %}"
+                                                 alt="{{ r.1firstFlightAirline }} logo"
+                                                 data-airline-code="{{ r.1firstFlightAirline }}"
+                                                 class="img-fluid"
+                                                 width="30" height="30"
+                                                 onerror="this.onerror=null;this.src='{% static jetblue_svg %}';" />
+                                             {% endwith %}
+                                                        {{ r.1firstFlightDepartureDate }} {{ r.1firstFlightDepartureAirport }}
+                                                        <span class="text-info"
+                                                              data-toggle="tooltip"
+                                                              title="{{ r.1firstFlightArrivalDuration }}">→</span>
+                                                        {{ r.1firstFlightArrivalAirport }} {{ r.1firstFlightArrivalDate }}
+                                                    </p>
+                                                    {% if r.1secondFlightDepartureAirport %}
+                                                        <p>
+                                                {% with jetblue_svg="images/jetblue.svg" %}
+                                                <img src="{% if r.1secondFlightAirline == 'B6' %}{% static jetblue_svg %}{% else %}{{ r.1secondFlightAirlineLogo }}{% endif %}"
+                                                    alt="{{ r.1secondFlightAirline }} logo"
+                                                    data-airline-code="{{ r.1secondFlightAirline }}"
+                                                    class="img-fluid"
+                                                    width="30" height="30"
+                                                    onerror="this.onerror=null;this.src='{% static jetblue_svg %}';" />
+                                                {% endwith %}
+                                                            {{ r.1secondFlightDepartureDate }} {{ r.1secondFlightDepartureAirport }}
+                                                            <span class="text-info"
+                                                                  data-toggle="tooltip"
+                                                                  title="{{ r.1secondFlightArrivalDuration }}">→</span>
+                                                            {{ r.1secondFlightArrivalAirport }} {{ r.1secondFlightArrivalDate }}
+                                                        </p>
+                                                        Connection duration: {{ r.1stop_time }}
+                                                        <br />
+                                                    {% endif %}
+                                                </div>
+                                            {% endif %}
+                                        </td>
+                                        <td class="text-right" data-label="Price">
+                                            <span class="price">₦{{ r.price|floatformat:0|intcomma }}</span>
+                                        </td>
+                                        {% comment %} <td class="text-center text-center-vertical">
+                                            <a href="{% url 'book_flight' flight %}" class="book-button btn text-decoration-none">Book Flight</a>
+                                        </td> {% endcomment %}
+                                        <td class="text-center text-center-vertical" data-label="Actions">
+                                            <form method="post" action="{% url 'book_flight' %}" class="d-inline">
+                                                {% csrf_token %}
+                                                <input type="hidden" name="flight_data" value="{{ flight|urlencode }}" />
+                                                <button type="submit" class="book-button btn mb-2 cta-orange">Book Flight</button>
+                                            </form>
+                                        </td>
+                                        <td class="d-none flight-json" data-flight='{{ flight|escapejs }}'></td>
+                                    </tr>
+                                {% endif %}
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            {% else %}
+                <div class="loading-message">
+                    <h4>No flights found for this itinerary</h4>
+                </div>
+            {% endif %}
+        </div>
+        <style>
+            .toast-card { background: #fff; border-left: 6px solid #007bff; padding: 12px 14px; margin-bottom: 8px; border-radius: 6px; box-shadow: 0 4px 12px rgba(0,0,0,0.08); min-width: 260px; }
+            .toast-success { border-left-color: #28a745; }
+            .toast-error { border-left-color: #dc3545; }
+            .toast-info { border-left-color: #17a2b8; }
+            .toast-close { float:right; cursor:pointer; color:#666; }
+        </style>
+        <script>
+            function showToast(message, type='info', timeout=4000) {
+                var container = document.getElementById('toast-container'); if(!container) return;
+                var card = document.createElement('div');
+                card.className = 'toast-card toast-' + (type==='success'?'success':(type==='error'?'error':'info'));
+                card.setAttribute('role','status');
+                card.innerHTML = '<span class="toast-close" onclick="this.parentNode.remove();">&times;</span><div>'+message+'</div>';
+                container.appendChild(card);
+                setTimeout(function(){ try{ card.remove(); } catch(e){} }, timeout);
+            }
+            {% if messages %}
+                {% for message in messages %}
+                    (function(){ var m = {{ message|safe|escapejs }}; showToast(m, '{{ message.tags|default:"info" }}'); })();
+                {% endfor %}
+            {% endif %}
+        </script>
+    <script src="https://code.jquery.com/jquery-3.2.1.slim.min.js"
+                integrity="sha384-KJ3o2DKtIkvYIK3UENzmM7KCkRr/rE9/Qpg6aAZGJwFDMVNA/GpGFF93hXpG5KkN"
+                crossorigin="anonymous"></script>
+        <script src="https://cdnjs.cloudflare.com/ajax/libs/popper.js/1.12.9/umd/popper.min.js"
+                integrity="sha384-ApNbgh9B+Y1QKtv3Rn7W3mgPxhU9K/ScQsAP7hUibX39j7fakFPskvXusvfa0b4Q"
+                crossorigin="anonymous"></script>
+        <script src="https://maxcdn.bootstrapcdn.com/bootstrap/4.0.0/js/bootstrap.min.js"
+                integrity="sha384-JZR6Spejh4U02d8jOt6vLEHfe/JQGiRRSQQxSfFWpi1MquVdAyjUar5+76PVCmYl"
+                crossorigin="anonymous"></script>
+    <script src="{% static 'demo/js/results_filters.js' %}"></script>
+    <script src="{% static 'demo/js/live_search.js' %}"></script>
+        <script>
+        $(document).ready(function(){
+            $('[data-toggle="tooltip"]').tooltip();
+        });
+        </script>
+    </body>
+</html>

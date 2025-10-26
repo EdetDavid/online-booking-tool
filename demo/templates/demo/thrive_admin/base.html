@@ -1,0 +1,165 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}Admin Dashboard{% endblock %}</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
+    <link rel="icon" href="{% static 'images/online_booking_tool.png' %}" type="image/x-icon">
+
+    <style>
+        /* General Reset and Font Setup */
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            font-family: 'Arial', sans-serif;
+        }
+        
+        body {
+            display: flex;
+            min-height: 100vh;
+            background-color: #f7f8fc;
+        }
+
+        /* Sidebar Styles */
+        .sidebar {
+            width: 280px;
+            background-color: #2c3e50;
+            padding: 25px;
+            display: flex;
+            flex-direction: column;
+            position: fixed;
+            top: 0;
+            bottom: 0;
+            left: 0;
+            color: #fff;
+            transition: width 0.3s;
+        }
+
+        .sidebar h2 {
+            font-size: 26px;
+            font-weight: bold;
+            margin-bottom: 30px;
+            text-align: center;
+            color: #ecf0f1;
+        }
+
+        .sidebar a {
+            color: #ecf0f1;
+            padding: 15px 20px;
+            text-decoration: none;
+            font-size: 18px;
+            display: flex;
+            align-items: center;
+            border-radius: 10px;
+            transition: all 0.3s ease;
+        }
+
+        .sidebar a:hover {
+            background-color: #3498db;
+            transform: scale(1.05);
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+        }
+
+        .sidebar a i {
+            margin-right: 10px;
+        }
+
+        .sidebar a.active {
+            background-color: #3498db;
+        }
+
+        /* Main Content Styles */
+        .main-content {
+            flex-grow: 1;
+            margin-left: 280px;
+            padding: 40px;
+            background-color: #f7f8fc;
+        }
+
+        .main-content .navbar {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 10px 20px;
+            background-color: #34495e;
+            border-radius: 8px;
+            margin-bottom: 30px;
+            color: white;
+        }
+
+        .navbar a {
+            color: white;
+            text-decoration: none;
+            font-size: 16px;
+            padding: 8px 16px;
+            background-color: #e74c3c;
+            border-radius: 20px;
+            transition: background-color 0.3s ease;
+        }
+
+        .navbar a:hover {
+            background-color: #c0392b;
+        }
+
+        /* Responsive Design */
+        @media (max-width: 768px) {
+            .sidebar {
+                width: 100px;
+            }
+
+            .sidebar a {
+                font-size: 14px;
+                padding: 10px 12px;
+            }
+
+            .main-content {
+                margin-left: 100px;
+                padding: 20px;
+            }
+
+            .navbar {
+                flex-direction: column;
+            }
+
+            .navbar a {
+                margin-top: 10px;
+            }
+        }
+    </style>
+</head>
+<body>
+
+    <!-- Sidebar Section -->
+    <div class="sidebar">
+        <h2> Thrive Admin Dashboard</h2>
+       
+       
+        <a class="my-2" href="{% url 'thrive_admin_approval_view' %}" class="{% if request.resolver_match.url_name == 'thrive_admin_approval_view' %}active{% endif %}">
+            <i class="fas fa-check-circle"></i>Approve Admin</a>
+            <a class="my-2" href="{% url 'update_price_increment' %}" class="{% if request.resolver_match.url_name == 'update_price_increment' %}active{% endif %}">
+                <i class="fas fa-dollar-sign"></i>Mark Up</a>
+            
+        <a class="my-2" href="{% url 'thrive_report' %}" class="{% if request.resolver_match.url_name == 'thrive_report' %}active{% endif %}">
+            <i class="fas fa-chart-line"></i>Reports</a>
+    </div>
+
+    <!-- Main Content Section -->
+    <div class="main-content">
+        <div class="navbar">
+            <h1>Welcome, {{ request.user.username }}</h1>
+            <a href="{% url 'logout' %}">Logout</a>  
+        </div>
+
+        <!-- Content Section Placeholder -->
+        <div class="content-section">
+            {% block content %}
+            <!-- Child pages will provide content here -->
+            {% endblock %}
+        </div>
+    </div>
+
+</body>
+</html>

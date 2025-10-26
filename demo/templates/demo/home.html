@@ -1,0 +1,825 @@
+{% load static %}
+{% load user_type_urls %}
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport"
+          content="width=device-width, initial-scale=1, shrink-to-fit=no" />
+  <title>Online Booking Tool - Your Next Adventure Awaits</title>
+    <link rel="icon"
+          href="{% static 'images/online_booking_tool.png' %}"
+          type="image/x-icon">
+    <!-- Bootstrap CSS -->
+    <link rel="stylesheet"
+          href="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css" />
+    <!-- Font Awesome for Icons -->
+    <link rel="stylesheet"
+          href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.3/css/all.min.css" />
+    <!-- jQuery UI CSS (for Autocomplete) -->
+    <link rel="stylesheet"
+          href="https://code.jquery.com/ui/1.13.2/themes/base/jquery-ui.css" />
+    <!-- Custom CSS -->
+    <link rel="stylesheet" type="text/css" href="{% static 'demo/style.css' %}" />
+  <link rel="stylesheet" type="text/css" href="{% static 'demo/css/home_custom.css' %}" />
+  <style>
+      /* Custom Styles */
+      body {
+        font-family: "Arial", sans-serif;
+        background-color: #f4f4f4;
+      }
+
+      .navbar {
+        box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+      }
+
+      .hero-section {
+            background: url("{% static 'images/background.jpg' %}") no-repeat center center fixed;
+            background-size: cover;
+            color: white;
+            padding: 80px 0 40px 0;
+            text-align: center;
+            min-height: 420px;
+      }
+
+      /* Services overlay (tabs with icons) similar to Wakanow */
+      .services-overlay {
+        position: absolute;
+        left: 50%;
+        transform: translateX(-50%);
+        top: 18%;
+        background: #fff;
+        border-radius: 8px;
+        box-shadow: 0 18px 40px rgba(16,24,40,0.16);
+        z-index: 1050;
+        width: 760px;
+        max-width: 92%;
+        padding: 18px 20px;
+      }
+      .services-list { display:flex; gap:18px; justify-content:space-between; align-items:center; }
+      .service-item { text-align:center; flex:1; color:#666; font-size:14px; }
+      .service-item .icon { display:block; width:48px; height:48px; margin:0 auto 6px; background:#f6f8fa; border-radius:8px; display:flex; align-items:center; justify-content:center; }
+      .service-item.active { color:#0ea5a4; }
+
+      .search-section {
+        background-color: transparent;
+        padding: 0 0 40px 0;
+      }
+
+      /* Large centered white search panel resembling Wakanow */
+      .search-card {
+        border-radius: 12px;
+        box-shadow: 0 18px 40px rgba(16,24,40,0.14);
+        overflow: visible;
+        border: 1px solid rgba(0,0,0,0.06);
+        background: #fff;
+        padding: 20px;
+      }
+
+      /* Large select city blocks */
+      .select-city {
+        background:#fff; border-radius:8px; padding:24px; box-shadow: none; border: none; text-align:left;
+      }
+      .select-city h3 { font-size:28px; margin:0; font-weight:700; color:#111; }
+      .select-city small { display:block; color:#777; margin-top:6px; }
+
+      /* Big orange CTA */
+      .cta-orange { background: linear-gradient(90deg,#ff8a00,#ff5e00); border:none; color:#fff; font-weight:700; padding:14px 40px; border-radius:28px; font-size:20px; }
+      .cta-orange:hover { opacity:0.95; }
+
+      /* Input focus state */
+      .search-card .form-control:focus {
+        border-color: #66afe9;
+        box-shadow: 0 0 0 0.2rem rgba(102,175,233,0.12);
+        outline: none;
+      }
+
+      /* Improved button */
+      .btn-primary.btn-lg {
+        padding: 0.85rem 1.25rem;
+        border-radius: 10px;
+        box-shadow: 0 6px 18px rgba(0,123,255,0.12);
+      }
+
+      /* Small submit spinner (hidden by default) */
+      .btn .spinner-border {
+        width: 1rem;
+        height: 1rem;
+        vertical-align: text-bottom;
+        margin-left: 0.5rem;
+        display: none;
+      }
+
+      .btn.loading .spinner-border { display: inline-block; }
+
+
+      #inputOrigin,
+      #inputDestination {
+    text-transform: uppercase;
+} 
+
+
+      .btn-primary {
+        background-color: #007bff;
+        border-color: #007bff;
+      }
+
+      .btn-primary:hover {
+        background-color: #0069d9;
+        border-color: #0062cc;
+      }
+
+      /* Autocomplete styling */
+      .ui-autocomplete {
+        z-index: 30000;
+        list-style: none;
+        padding: 0;
+        margin: 0;
+        background-color: #fff;
+        border: 1px solid #ccc;
+        border-radius: 4px;
+      }
+
+      /* Responsive tweaks for overlay and search card */
+      @media (max-width: 992px) {
+        .services-overlay { top: 12%; padding: 12px; }
+        .services-list { gap:10px }
+        .service-item .icon { width:38px; height:38px }
+      }
+
+      .ui-autocomplete .ui-menu-item {
+        padding: 8px 12px;
+        cursor: pointer;
+      }
+
+      .ui-autocomplete .ui-menu-item:hover,
+      .ui-autocomplete .ui-menu-item.ui-state-focus {
+        background-color: #f5f5f5;
+      }
+
+      /* Footer styles */
+      .footer {
+        background-color: #f8f9fa;
+        padding: 20px 0;
+        color: #6c757d;
+      }
+
+      .footer a {
+        color: #007bff;
+        text-decoration: none;
+      }
+
+      .footer a:hover {
+        text-decoration: underline;
+      }
+
+        /* Custom Stylish Navbar */
+  .navbar {
+    background: rgba(255, 255, 255, 0.8);
+    backdrop-filter: blur(10px);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+    transition: background-color 0.3s ease;
+  }
+
+
+  
+  .navbar:hover {
+    background: rgba(255, 255, 255, 1);
+  }
+
+  .navbar-brand {
+    font-size: 1.5rem;
+    font-weight: bold;
+    color: #007bff;
+  }
+
+  .navbar-nav .nav-link {
+    font-size: 1.1rem;
+    margin-left: 1.5rem;
+    color: #555;
+    transition: color 0.3s ease;
+  }
+
+  .navbar-nav .nav-link:hover {
+    color: #007bff;
+  }
+
+  .navbar-toggler {
+    border: none;
+  }
+
+  .navbar-toggler-icon {
+    background-image: url("data:image/svg+xml;...");
+  }
+
+  /* Stylish Cart Icon */
+  .navbar-nav .fa-shopping-cart {
+    font-size: 1.3rem;
+    color: #ffcc00;
+  }
+
+  /* Additional Styling for a Better UX */
+  .navbar-collapse {
+    justify-content: center;
+  }
+
+   /* Stylish Login Button */
+   .navbar .login-btn {
+    font-size: 1.1rem;
+    padding: 0.5rem 1rem;
+    border-radius: 25px;
+    color: white;
+    background-color: #007bff;
+    transition: background-color 0.3s ease;
+  }
+
+  .navbar .login-btn:hover {
+    background-color: #0056b3;
+  }
+
+  /* Username Display after Login */
+  .navbar .username-text {
+    font-size: 1.1rem;
+    color: #007bff;
+    margin-right: 1rem;
+  }
+
+  .navbar .username-dropdown {
+    font-size: 1rem;
+    color: #555;
+  }
+
+  .navbar .dropdown-menu a:hover {
+    background-color: #f0f0f0;
+  }
+   /* Error Message Styling */
+  .error-message {
+    background-color: #fdd; /* Light red background */
+    border: 1px solid #faa; /* Red border */
+    border-radius: 8px;
+    padding: 15px;
+    margin-bottom: 20px;
+    text-align: center;
+    font-size: 1.1rem;
+    color: #a00; /* Dark red text */
+    max-width: 1000px;
+    margin: 20px auto; /* Centering the error message */
+    animation: fadeIn 0.5s ease-in-out;
+  }
+
+  .error-message ul {
+    list-style-type: none;
+    margin: 0;
+    padding: 0;
+  }
+
+  .error-message li {
+    color: #a00; /* Dark red text */
+    font-weight: bold;
+  }
+
+  /* Animation for Error Message */
+  @keyframes fadeIn {
+    from {
+      opacity: 0;
+    }
+    to {
+      opacity: 1;
+    }
+  }
+
+  .navbar-toggler,
+.navbar-toggler:focus,
+.navbar-toggler:active,
+.navbar-toggler-icon:focus {
+  outline: none !important;
+  box-shadow: none !important;
+  border: none !important;
+}
+  /* Hero carousel styles */
+  .hero-img { height: 480px; object-fit: cover; filter: brightness(0.7); }
+  .hero-caption { bottom: 20%; }
+  .hero-caption h1 { text-shadow: 0 4px 12px rgba(0,0,0,0.45); }
+  .hero-caption p { text-shadow: 0 2px 8px rgba(0,0,0,0.35); }
+
+  /* Popular destination cards */
+  .card-img-top { height: 220px; object-fit: cover; border-radius: 8px 8px 0 0; }
+  .card .card-body { background: linear-gradient(180deg, rgba(255,255,255,0.9), #fff); }
+    </style>
+    <script>
+  function checkAuth(event) {
+    // Check if user is authenticated
+    var isAuthenticated = "{{ user.is_authenticated }}";
+    
+    // If user is not authenticated, prevent form submission and display message
+    if (isAuthenticated === "False") {
+      event.preventDefault(); // Prevent form submission
+      
+      // Show the message box
+      var messageBox = document.getElementById("authMessage");
+      messageBox.style.display = "block";
+      
+      // Redirect to login page after 2 seconds
+      setTimeout(function() {
+        window.location.href = "{% url 'login' %}";
+      }, 2000); // 2-second delay before redirect
+    }
+  }
+    </script>
+  </head>
+  <body>
+    <a class="skip-link" href="#search" style="position:absolute;left:-999px;top:auto;width:1px;height:1px;overflow:hidden;">Skip to search</a>
+    <style>
+      .skip-link:focus { position: static; left:10px; top:10px; width:auto; height:auto; background:#fff; padding:8px 12px; border-radius:4px; z-index:2000; box-shadow:0 2px 6px rgba(0,0,0,.2);} 
+      .focus-outline:focus { outline: 3px solid #80bdff; outline-offset: 2px; }
+    </style>
+  <!-- Navigation -->
+  <nav class="navbar navbar-expand-lg fixed-top" role="navigation" aria-label="Main navigation">
+      <a class="navbar-brand" href="{% url 'home' %}">
+  <img src="{% static 'images/online_booking_tool.png' %}"
+       width="40"
+       height="40"
+       alt="Online Booking Tool Logo" />
+     Online Booking Tool
+      </a>
+      <button class="navbar-toggler "
+              type="button"
+              data-toggle="collapse"
+              data-target="#navbarNav">
+        <span class="navbar-toggler-icon">
+          <i class="fas fa-bars text-dark"> </i>
+        </span>
+      </button>
+      <div class="collapse navbar-collapse" id="navbarNav">
+  <ul class="navbar-nav mx-auto" role="menubar">
+       
+          <li class="nav-item" role="none">
+            <a class="nav-link focus-outline" role="menuitem" href="#" aria-label="Open cart" data-toggle="modal" data-target="#cartModal">
+              <i class="fas fa-shopping-cart" aria-hidden="true"></i>
+            </a>
+          </li>
+        </ul>
+        <!-- Services as navbar links (moved from overlay) -->
+        <ul class="navbar-nav mx-auto navbar-services d-none d-lg-flex" style="gap:18px;align-items:center;margin-left:20px;">
+          <li class="nav-item service-link active"><a class="nav-link" href="{% url "home" %}"><i class="fas fa-plane"></i> Flight</a></li>
+          <li class="nav-item service-link"><a class="nav-link" href="{% url 'hotel' %}"><i class="fas fa-hotel"></i> Stays</a></li>
+          <li class="nav-item service-link"><a class="nav-link" href="{% url 'coming_soon' %}"><i class="fas fa-car"></i> Rides</a></li>
+          <li class="nav-item service-link"><a class="nav-link" href="{% url 'coming_soon' %}"><i class="fas fa-umbrella-beach"></i> Holidays</a></li>
+          <li class="nav-item service-link"><a class="nav-link" href="{% url 'coming_soon' %}"><i class="fas fa-suitcase-rolling"></i> Extras</a></li>
+        </ul>
+        <!-- Login Button or Username Display -->
+        <ul class="navbar-nav ml-auto">
+          {% if user.is_authenticated %}
+            <li class="nav-item dropdown">
+              <a class="nav-link username-text dropdown-toggle"
+                 href="#"
+                 id="userDropdown"
+                 role="button"
+                 data-toggle="dropdown"
+                 aria-haspopup="true"
+                 aria-expanded="false">Signed in as: {{ user.username }}</a>
+              <div class="dropdown-menu dropdown-menu-right username-dropdown"
+                   aria-labelledby="userDropdown">
+                <a class="dropdown-item" href="{% get_profile_url user %}">Profile</a>
+                <a class="dropdown-item" href="{% url 'logout' %} ">Logout</a>
+              </div>
+            </li>
+          {% else %}
+            <li class="nav-item">
+              <a class="btn login-btn focus-outline" href="{% url 'login' %}" role="button" aria-label="Login">Login</a>
+            </li>
+          {% endif %}
+        </ul>
+      </div>
+    </nav>
+    <!-- Cart Modal -->
+    <div class="modal fade"
+         id="cartModal"
+         tabindex="-1"
+         aria-labelledby="cartModalLabel"
+         aria-hidden="true">
+      <div class="modal-dialog">
+        <div class="modal-content">
+          <div class="modal-header">
+            <h5 class="modal-title" id="cartModalLabel">Your Cart</h5>
+            <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+              <span aria-hidden="true">&times;</span>
+            </button>
+          </div>
+          <div class="modal-body">
+            <p>Your cart is currently empty.</p>
+          </div>
+          <div class="modal-footer">
+            <button type="button" class="btn btn-primary" data-dismiss="modal">Continue Shopping</button>
+            <button type="button" class="btn btn-primary">Checkout</button>
+          </div>
+        </div>
+      </div>
+    </div>
+    <!-- Hero Section (carousel with photographic images) -->
+    <section class="hero-section p-0 position-relative">
+      <div id="heroCarousel" class="carousel slide" data-ride="carousel">
+        <ol class="carousel-indicators">
+          <li data-target="#heroCarousel" data-slide-to="0" class="active"></li>
+          <li data-target="#heroCarousel" data-slide-to="1"></li>
+          <li data-target="#heroCarousel" data-slide-to="2"></li>
+          <li data-target="#heroCarousel" data-slide-to="3"></li>
+        </ol>
+        <div class="carousel-inner">
+          <div class="carousel-item active">
+            <img class="d-block w-100 hero-img" src="{% static 'images/paris.webp' %}" alt="Paris">
+            <div class="carousel-caption d-md-block hero-caption">
+              <h1 class="display-4">Experience Paris</h1>
+              <p class="lead">From art to cuisine — find the best flights and hotels.</p>
+              <a href="#search" class="btn btn-primary btn-lg">Search Flights</a>
+            </div>
+          </div>
+          <div class="carousel-item">
+            <img class="d-block w-100 hero-img" src="{% static 'images/tokyo.webp' %}" alt="Tokyo">
+            <div class="carousel-caption d-md-block hero-caption">
+              <h1 class="display-4">Discover Tokyo</h1>
+              <p class="lead">Modern life and deep tradition — book your next trip.</p>
+              <a href="#search" class="btn btn-primary btn-lg">Search Flights</a>
+            </div>
+          </div>
+          <div class="carousel-item">
+            <img class="d-block w-100 hero-img" src="{% static 'images/new_york.webp' %}" alt="New York">
+            <div class="carousel-caption d-md-block hero-caption">
+              <h1 class="display-4">Visit New York</h1>
+              <p class="lead">The city that never sleeps — great deals available.</p>
+              <a href="#search" class="btn btn-primary btn-lg">Search Flights</a>
+            </div>
+          </div>
+          <div class="carousel-item">
+            <picture>
+              <source srcset="{% static 'images/zanzibar.jpg' %}" type="image/webp">
+              <source srcset="{% static 'images/zanzibar.svg' %}" type="image/svg+xml">
+              <img class="d-block w-100 hero-img" src="{% static 'images/background.jpg' %}" alt="Zanzibar">
+            </picture>
+            <div class="carousel-caption d-md-block hero-caption">
+              <h1 class="display-4">Zanzibar & Tropical Beaches</h1>
+              <p class="lead">Sun, sea and spice islands — explore beach destinations.</p>
+              <a href="#search" class="btn btn-primary btn-lg">Search Flights</a>
+            </div>
+          </div>
+        </div>
+        <a class="carousel-control-prev" href="#heroCarousel" role="button" data-slide="prev">
+          <span class="carousel-control-prev-icon" aria-hidden="true"></span>
+          <span class="sr-only">Previous</span>
+        </a>
+        <a class="carousel-control-next" href="#heroCarousel" role="button" data-slide="next">
+          <span class="carousel-control-next-icon" aria-hidden="true"></span>
+          <span class="sr-only">Next</span>
+        </a>
+      </div>
+    </section>
+    <!-- Search Section with Wakanow-like card -->
+    <section id="search" class="search-section">
+      <div class="container">
+        <div class="row justify-content-center">
+          <div class="col-lg-10 col-md-11">
+            <div class="search-card">
+              <form action="" method="POST" id="form_id" onsubmit="checkAuth(event)">
+                {% csrf_token %}
+                <div id="authMessage" style="display: none; text-align: center; color: red; font-size: 16px; background-color: #f8d7da; padding: 10px; border-radius: 5px; margin-top: 10px">You need to log in to submit the form. Redirecting to login page...</div>
+                {% if messages %}
+                  <div class="error-message"><ul>{% for message in messages %}<li>{{ message }}</li>{% endfor %}</ul></div>
+                {% endif %}
+
+                <!-- Top controls: trip type radios + cabin class dropdown -->
+                <div class="d-flex justify-content-between align-items-center mb-3" style="gap:12px;">
+                  <div class="btn-group btn-group-toggle" data-toggle="buttons">
+                    <label class="btn btn-light active">
+                      <input type="radio" name="tripTypeRadio" id="trip_oneway" value="one-way" autocomplete="off"> One Way
+                    </label>
+                    <label class="btn btn-light">
+                      <input type="radio" name="tripTypeRadio" id="trip_round" value="round-trip" autocomplete="off" checked> Round Trip
+                    </label>
+                    <label class="btn btn-light">
+                      <input type="radio" name="tripTypeRadio" id="trip_multi" value="multi-city" autocomplete="off"> Multi City
+                    </label>
+                  </div>
+                  <div>
+                    <select class="form-control" id="cabinClassTop" name="cabinClassTop" aria-label="Cabin class" style="min-width:160px;">
+                      <option value="economy">Economy</option>
+                      <option value="premium_economy">Premium Economy</option>
+                      <option value="business">Business</option>
+                      <option value="first">First Class</option>
+                    </select>
+                  </div>
+                </div>
+
+                <div class="d-flex flex-wrap align-items-stretch" style="gap:16px;">
+                  <div class="select-city flex-fill">
+                    <label class="d-block">From</label>
+                    <h3 id="fromLabel">Select City</h3>
+                    <small>Enter city or airport</small>
+                      <div class="input-with-outer d-flex align-items-center mt-2">
+                        <span class="outer-icon"><i class="fa fa-plane" aria-hidden="true"></i></span>
+                        <input type="text" class="form-control flex-fill" id="inputOrigin" name="Origin" required placeholder="City or airport code" aria-label="Departure city">
+                      </div>
+                  </div>
+                  <div class="swap-wrap d-flex align-items-center justify-content-center px-2">
+                    <button type="button" id="swapLocations" class="swap-button btn btn-light" aria-label="Swap origin and destination">
+                      <i class="fa fa-exchange-alt" aria-hidden="true"></i>
+                    </button>
+                  </div>
+                  <div class="select-city flex-fill">
+                    <label class="d-block">To</label>
+                    <h3 id="toLabel">Select City</h3>
+                    <small>Enter city or airport</small>
+                    <div class="input-with-outer d-flex align-items-center mt-2">
+                      <span class="outer-icon"><i class="fa fa-map-marker-alt" aria-hidden="true"></i></span>
+                      <input type="text" class="form-control flex-fill" id="inputDestination" name="Destination" required placeholder="City or airport code" aria-label="Destination city">
+                    </div>
+                  </div>
+                  <div class="d-flex search-controls-row align-items-center">
+                    <div class="date-block">
+                      <label>Departure</label>
+                      <div><strong id="depDateDisplay">--</strong></div>
+                      <input type="date" name="Departuredate" id="idDeparturedate" class="form-control mt-2" required />
+                    </div>
+                    <div class="date-block">
+                      <label>Return</label>
+                      <div><strong id="retDateDisplay">--</strong></div>
+                      <input type="date" name="Returndate" id="idReturndate" class="form-control mt-2" />
+                      <!-- hidden select fallback to keep server-side expectations if any -->
+                      <select id="tripType" name="tripType" class="d-none">
+                        <option value="one-way">One-Way</option>
+                        <option value="round-trip" selected>Round-Trip</option>
+                        <option value="multi-city">Multi-City</option>
+                      </select>
+                    </div>
+                    <div class="passenger-block">
+                      <label>Passenger</label>
+                      <input type="number" class="form-control mt-2" id="passengerCount" name="passengerCount" value="1" min="1" />
+                    </div>
+                  </div>
+                </div>
+
+                <div class="d-flex justify-content-center mt-3">
+                  <button class="cta-orange" type="submit" id="searchSubmit">SEARCH</button>
+                </div>
+                <div class="d-flex justify-content-center mt-2">
+                  <div class="form-check">
+                    <input class="form-check-input" type="checkbox" value="1" id="flexibleDates">
+                    <label class="form-check-label" for="flexibleDates">
+                      My dates are flexible (+/- 3 days)
+                    </label>
+                  </div>
+                </div>
+              </form>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+    <!-- Popular Destinations -->
+
+  <!-- Toast container -->
+  <div id="toast-container" aria-live="polite" aria-atomic="true" class="toast-fixed"></div>
+
+    <section class="py-5">
+      <div class="container">
+        <h3 class="text-center mb-4">Popular Destinations</h3>
+        <div class="row">
+          <div class="col-md-4">
+            <div class="card mb-4 shadow-sm">
+              <div class="position-relative">
+                <img src="{% static 'images/paris.webp' %}" class="card-img-top" alt="Paris, France" />
+                <div class="card-overlay-gradient"></div>
+              </div>
+              <div class="card-body text-center">
+                <h5 class="card-title">Paris, France</h5>
+                <p class="card-text">Discover the city of love and lights.</p>
+                <a href="#search" class="btn btn-outline-light btn-booknow">Book Now</a>
+              </div>
+            </div>
+          </div>
+          <div class="col-md-4">
+            <div class="card mb-4 shadow-sm">
+              <div class="position-relative">
+                <img src="{% static 'images/tokyo.webp' %}" class="card-img-top" alt="Tokyo, Japan" />
+                <div class="card-overlay-gradient"></div>
+              </div>
+              <div class="card-body text-center">
+                <h5 class="card-title">Tokyo, Japan</h5>
+                <p class="card-text">Experience the perfect blend of tradition and technology.</p>
+                <a href="#search" class="btn btn-outline-light btn-booknow">Book Now</a>
+              </div>
+            </div>
+          </div>
+          <div class="col-md-4">
+            <div class="card mb-4 shadow-sm">
+              <div class="position-relative">
+                <img src="{% static 'images/new_york.webp' %}" class="card-img-top" alt="New York, USA" />
+                <div class="card-overlay-gradient"></div>
+              </div>
+              <div class="card-body text-center">
+                <h5 class="card-title">New York, USA</h5>
+                <p class="card-text">Explore the city that never sleeps.</p>
+                <a href="#search" class="btn btn-outline-light btn-booknow">Book Now</a>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+    <!-- Footer -->
+    <footer class="footer">
+      <div class="container text-center">
+  <p>&copy; 2024 Online Booking Tool. All rights reserved.</p>
+        <p>
+          <a href="{% url 'update_price_increment' %}">Terms of Service</a> | <a href="{% url 'coming_soon' %}">Privacy Policy</a>
+        </p>
+      </div>
+    </footer>
+    <!-- jQuery -->
+    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+    <!-- jQuery UI (for Autocomplete) -->
+    <script src="https://code.jquery.com/ui/1.13.2/jquery-ui.min.js"></script>
+    <!-- Bootstrap JS -->
+    <script src="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/js/bootstrap.bundle.min.js"></script>
+    <script>
+      $(document).ready(function () {
+
+        // Simple client-side cache for autocomplete results
+        var acCache = {};
+
+        function makeSource(url) {
+          return function(request, response) {
+            var term = request.term.trim();
+            if (!term) return response([]);
+            if (acCache[term]) return response(acCache[term]);
+            $.ajax({
+              url: url,
+              data: { term: term },
+              success: function(data) {
+                acCache[term] = data;
+                response(data);
+              },
+              error: function() { response([]); }
+            });
+          };
+        }
+  // Autocomplete for Origin - when user selects, normalize to IATA code
+        $("#inputOrigin").autocomplete({
+          source: makeSource("{% url 'origin_airport_search' %}"),
+          minLength: 2,
+          delay: 250,
+          select: function(event, ui) {
+            // ui.item is a string like "LAX, Los Angeles"; extract IATA
+            var code = ui.item.value.split(',')[0].trim().toUpperCase();
+            $(this).val(code);
+            return false;
+          }
+        });
+  // show suggestions on focus
+  $('#inputOrigin').on('focus', function(){ var val = $(this).val(); if(val.length<2) $(this).autocomplete('search', $(this).val() ); });
+
+        // Autocomplete for Destination
+        $("#inputDestination").autocomplete({
+          source: makeSource("{% url 'destination_airport_search' %}"),
+          minLength: 2,
+          delay: 250,
+          select: function(event, ui) {
+            var code = ui.item.value.split(',')[0].trim().toUpperCase();
+            $(this).val(code);
+            return false;
+          }
+        });
+  $('#inputDestination').on('focus', function(){ var val = $(this).val(); if(val.length<2) $(this).autocomplete('search', $(this).val() ); });
+
+        // Set minimum date for departure to today
+        var today = new Date().toISOString().split('T')[0];
+        $('#idDeparturedate').attr('min', today);
+
+        // Trip type change handler: read from radios and sync hidden select for server-side compatibility
+        function tripTypeChangeHandler(t) {
+          // sync hidden select
+          $('#tripType').val(t);
+          if (t === 'one-way') {
+            $('#idReturndate').val('').prop('disabled', true).prop('required', false);
+          } else if (t === 'round-trip') {
+            $('#idReturndate').prop('disabled', false).prop('required', true);
+            $('#idReturndate').attr('min', $('#idDeparturedate').val() || today);
+          } else { // multi-city
+            $('#idReturndate').prop('disabled', false).prop('required', false);
+          }
+        }
+
+        $('input[name="tripTypeRadio"]').on('change', function() { tripTypeChangeHandler($(this).val()); });
+        // initialize from checked radio
+        var initTrip = $('input[name="tripTypeRadio"]:checked').val() || 'round-trip';
+        tripTypeChangeHandler(initTrip);
+
+        // Keep return date min in sync with departure
+        $('#idDeparturedate').on('change', function() {
+          var dep = $(this).val();
+          if (dep) {
+            $('#idReturndate').attr('min', dep);
+            if ($('#idReturndate').val() && $('#idReturndate').val() < dep) {
+              $('#idReturndate').val(dep);
+            }
+          }
+        });
+
+        // Passenger controls
+        var maxPassengers = 9;
+        $('#increasePassengers').click(function () {
+          let count = parseInt($('#passengerCount').val()) || 1;
+          if (count < maxPassengers) $('#passengerCount').val(count + 1);
+        });
+        $('#decreasePassengers').click(function () {
+          let count = parseInt($('#passengerCount').val()) || 1;
+          if (count > 1) $('#passengerCount').val(count - 1);
+        });
+        $('#passengerCount').on('blur', function() {
+          let v = parseInt($(this).val()) || 1;
+          if (v < 1) v = 1;
+          if (v > maxPassengers) v = maxPassengers;
+          $(this).val(v);
+        });
+
+        // Integrated auth check + robust submit validation
+        $('#form_id').on('submit', function(e) {
+          e.preventDefault();
+          var isAuthenticated = "{{ user.is_authenticated }}" === 'True';
+
+          if (!isAuthenticated) {
+            $('#authMessage').show();
+            setTimeout(function() { window.location.href = "{% url 'login' %}"; }, 1200);
+            return false;
+          }
+
+          var origin = $('#inputOrigin').val().trim().toUpperCase();
+          var destination = $('#inputDestination').val().trim().toUpperCase();
+          var departure = $('#idDeparturedate').val();
+          var returnd = $('#idReturndate').val();
+          var tripType = $('#tripType').val();
+
+          // Validate IATA codes (3 letters) or show helpful message
+          var codeRe = /^[A-Z]{3}$/;
+          if (!codeRe.test(origin)) {
+            showToast('Please pick an origin from the suggestions or enter a 3-letter IATA code.', 'error');
+            $('#inputOrigin').focus();
+            return false;
+          }
+          if (!codeRe.test(destination)) {
+            showToast('Please pick a destination from the suggestions or enter a 3-letter IATA code.', 'error');
+            $('#inputDestination').focus();
+            return false;
+          }
+
+          // Date validation
+          if (!departure) {
+            showToast('Please select a departure date.', 'error');
+            $('#idDeparturedate').focus();
+            return false;
+          }
+          if (tripType === 'round-trip') {
+            if (!returnd) { showToast('Please select a return date for round-trip.', 'error'); $('#idReturndate').focus(); return false; }
+            if (returnd < departure) { showToast('Return date must be the same or after departure date.', 'error'); $('#idReturndate').focus(); return false; }
+          }
+
+          // All checks passed - show loading spinner and submit
+          var $btn = $('#searchSubmit');
+          $btn.addClass('loading');
+          // disable inputs to prevent double submits
+          $btn.prop('disabled', true);
+          $(this).off('submit').submit();
+        });
+
+        // Update visible labels to match inputs (keeps new layout lively)
+        function normalizeCityLabel(val) {
+          if (!val) return 'Select City';
+          return val.length <= 3 ? val.toUpperCase() : val;
+        }
+        $('#inputOrigin').on('input change blur', function() { $('#fromLabel').text(normalizeCityLabel($(this).val())); });
+        $('#inputDestination').on('input change blur', function() { $('#toLabel').text(normalizeCityLabel($(this).val())); });
+        $('#idDeparturedate').on('change', function(){ var v = $(this).val(); $('#depDateDisplay').text(v || '--'); });
+        $('#idReturndate').on('change', function(){ var v = $(this).val(); $('#retDateDisplay').text(v || '--'); });
+
+        // Swap origin and destination inputs
+        $('#swapLocations').on('click', function(){
+          var a = $('#inputOrigin').val();
+          var b = $('#inputDestination').val();
+          $('#inputOrigin').val(b).trigger('change');
+          $('#inputDestination').val(a).trigger('change');
+        });
+
+        // Flexible dates toggle (for now just set an attribute — backend handling optional)
+        $('#flexibleDates').on('change', function(){
+          if ($(this).is(':checked')) {
+            $('#idDeparturedate').attr('data-flexible','1');
+            $('#idReturndate').attr('data-flexible','1');
+          } else {
+            $('#idDeparturedate').removeAttr('data-flexible');
+            $('#idReturndate').removeAttr('data-flexible');
+          }
+        });
+
+      });
+    </script>
+  </body>
+</html>

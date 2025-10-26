@@ -1,0 +1,134 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Flight Approval Required</title>
+    <style>
+        body {
+            font-family: 'Arial', sans-serif;
+            background-color: #e9ecef;
+            margin: 0;
+            padding: 20px;
+        }
+        .email-container {
+            background-color: #ffffff;
+            border-radius: 10px;
+            padding: 30px;
+            max-width: 600px;
+            margin: auto;
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.1);
+            transition: all 0.3s ease;
+        }
+        .email-container:hover {
+            box-shadow: 0 8px 30px rgba(0, 0, 0, 0.2);
+        }
+        h2 {
+            color: #333333;
+            font-size: 24px;
+            margin-bottom: 10px;
+        }
+        p {
+            font-size: 16px;
+            color: #666666;
+            line-height: 1.6;
+        }
+        ul {
+            list-style-type: none;
+            padding: 0;
+        }
+        li {
+            padding: 10px 0;
+            border-bottom: 1px solid #f0f0f0;
+        }
+        li:last-child {
+            border: none;
+        }
+        .strong {
+            color: #333333;
+            font-weight: bold;
+        }
+        .btn {
+            display: inline-block;
+            padding: 12px 25px;
+            color: #ffffff;
+            background-color: #28a745;
+            text-decoration: none;
+            border-radius: 5px;
+            margin-top: 20px;
+            transition: background-color 0.3s ease;
+            font-size: 16px;
+        }
+        .btn:hover {
+            background-color: #218838;
+        }
+        .btn-decline {
+            display: inline-block;
+            padding: 12px 25px;
+            color: #ffffff;
+            background-color: #dc3545;
+            text-decoration: none;
+            border-radius: 5px;
+            margin-top: 20px;
+            margin-left: 10px;
+            transition: background-color 0.3s ease;
+            font-size: 16px;
+        }
+        .btn-decline:hover {
+            background-color: #c82333;
+        }
+        footer {
+            margin-top: 20px;
+            font-size: 14px;
+            color: #999999;
+            text-align: center;
+        }
+    </style>
+</head>
+<body>
+    <div class="email-container">
+        <h2>Flight Approval Required</h2>
+        <p>Dear Admin,</p>
+        <p>
+            A flight booking request has been submitted by <span class="strong">{{ user.first_name }} {{ user.last_name }}</span> and is pending your approval.
+        </p>
+        <p>Here are the details of the flight booking:</p>
+        <ul>
+            <li>
+                <span class="strong">Origin:</span> {{ origin }}
+            </li>
+            <li>
+                <span class="strong">Destination:</span> {{ destination }}
+            </li>
+            <li>
+                <span class="strong">Departure Date:</span> {{ departure_date }}
+            </li>
+            <li>
+                <span class="strong">Return Date:</span> {{ return_date }}
+            </li>
+            <li>
+                <span class="strong">Passenger Count:</span> {{ passenger_count }}
+            </li>
+            <li>
+                <span class="strong">Travel Class:</span> {{ travel_class }}
+            </li>
+            <li>
+                <span class="strong">Price:</span> {{ price }}
+            </li>
+        </ul>
+        <p>
+            Please review and approve the flight booking request. Click the button below to proceed with the approval process.
+        </p>
+        <a href="https://your-booking-site.com/approve-flight/{{ booking_id }}" class="btn">Approve Flight</a>
+        <a href="https://your-booking-site.com/decline-flight/{{ booking_id }}" class="btn-decline">Decline Flight</a>
+        <p>Thank you for your attention.</p>
+        <p>
+            Best regards,<br>
+            The Flight Booking Team
+        </p>
+    </div>
+    <footer>
+        &copy; 2024 Your Booking Site. All rights reserved.
+    </footer>
+</body>
+</html>

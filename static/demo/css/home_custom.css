@@ -1,0 +1,244 @@
+/* Custom homepage styles (moved from inline styles in home.html) */
+body {
+  font-family: "Arial", sans-serif;
+  background-color: #f4f4f4;
+}
+.hero-section {
+  background-size: cover;
+  color: white;
+  padding: 80px 0 40px 0;
+  text-align: center;
+  min-height: 420px;
+}
+.services-overlay {
+  position: absolute;
+  left: 50%;
+  transform: translateX(-50%);
+  top: 14%;
+  background: #fff;
+  border-radius: 8px;
+  box-shadow: 0 18px 40px rgba(16, 24, 40, 0.16);
+  z-index: 11000; /* make sure overlay is above other elements */
+  width: 760px;
+  max-width: 92%;
+  padding: 18px 20px;
+}
+.services-list {
+  display: flex;
+  gap: 18px;
+  justify-content: space-between;
+  align-items: center;
+}
+.service-item {
+  text-align: center;
+  flex: 1;
+  color: #666;
+  font-size: 14px;
+}
+.service-item .icon {
+  display: block;
+  width: 48px;
+  height: 48px;
+  margin: 0 auto 6px;
+  background: #f6f8fa;
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.service-item.active {
+  color: #0ea5a4;
+}
+.search-section {
+  background-color: transparent;
+  padding: 0 0 40px 0;
+}
+.search-card {
+  border-radius: 12px;
+  box-shadow: 0 18px 40px rgba(16, 24, 40, 0.14);
+  overflow: visible;
+  border: 1px solid rgba(0, 0, 0, 0.06);
+  background: #fff;
+  padding: 20px;
+  margin-top: 42px; /* create spacing by default */
+}
+
+/* Visual polish for forms */
+.search-card {
+  background: linear-gradient(180deg, rgba(255,255,255,0.98), rgba(250,250,252,0.95));
+  border-radius: 14px;
+  padding: 26px;
+}
+.select-city { position: relative; }
+.select-city::after { content: ''; position: absolute; right: 18px; top: 18px; width: 48px; height: 48px; border-radius: 8px; background: linear-gradient(180deg,#fff,#f3f6fb); box-shadow: inset 0 -8px 12px rgba(0,0,0,0.03); }
+.select-city input { border-radius: 12px; padding: 14px 16px; border:1px solid rgba(15,23,42,0.06); box-shadow: 0 6px 18px rgba(12,20,40,0.04); }
+.select-city h3 { font-size: 26px; color:#081028; }
+.select-city small { color:#6b7280; }
+
+/* Inputs global polish */
+.search-card .form-control { border-radius: 10px; height:44px; padding:10px 12px; }
+.search-card .form-control:focus { transform: translateY(-1px); }
+
+/* CTA and subtle hover */
+.cta-orange { box-shadow: 0 10px 30px rgba(255,94,0,0.14); transition: transform .12s ease, box-shadow .12s ease; }
+.cta-orange:active { transform: translateY(1px) scale(.995); }
+
+/* small label badges */
+.date-badge { display:block; background:#f3f6fb; color:#111827; padding:8px 10px; border-radius:8px; font-weight:600; }
+
+/* Micro animation for appearance */
+@keyframes liftIn { from { opacity:0; transform: translateY(6px); } to { opacity:1; transform: translateY(0); } }
+.search-card { animation: liftIn .36s ease both; }
+
+/* Guest control button polish */
+.input-group .btn { border-radius:8px; }
+
+/* Make services nav icons slightly larger and balanced */
+.navbar-services .service-link .nav-link i { width:34px; height:34px; border-radius:6px; font-size:14px; }
+
+/* icon inside input */
+.input-with-icon { position: relative; }
+.input-with-icon i.fa { position: absolute; left: 10px; top: 50%; transform: translateY(-50%); color: #ff5e00; background: rgba(255,255,255,0.8); width:36px; height:36px; display:flex; align-items:center; justify-content:center; border-radius:8px; box-shadow: 0 4px 10px rgba(12,20,40,0.06); }
+.input-with-icon input { padding-left:54px; }
+
+/* Icons outside inputs - left-aligned */
+.input-with-outer { display: flex; align-items: center; gap: 6px; }
+.input-with-outer .outer-icon { display: inline-flex; align-items: center; justify-content: center; width:36px; height:36px; background:#fff; border-radius:8px; box-shadow: 0 4px 10px rgba(12,20,40,0.06); color:#ff5e00; margin-right: -6px; flex: 0 0 auto; }
+.input-with-outer .outer-icon i { font-size:16px; }
+.input-with-outer .form-control { margin-left: 0; padding-left: 12px; }
+
+/* ensure cta aligns nicely on small screens */
+@media (max-width:768px) {
+  .cta-orange { width:100%; padding-left:0; padding-right:0; }
+}
+
+/* Pull the search card up under the overlay so the overlay sits visually on top */
+@media (min-width: 768px) {
+  .search-card { margin-top: -36px; position: relative; z-index: 1000; }
+}
+.select-city {
+  background: #fff;
+  border-radius: 8px;
+  padding: 24px;
+  box-shadow: none;
+  border: none;
+  text-align: left;
+}
+.select-city h3 {
+  font-size: 28px;
+  margin: 0;
+  font-weight: 700;
+  color: #111;
+}
+.select-city small {
+  display: block;
+  color: #777;
+  margin-top: 6px;
+}
+.cta-orange {
+  background: linear-gradient(90deg, #ff8a00, #ff5e00);
+  border: none;
+  color: #fff;
+  font-weight: 700;
+  padding: 14px 40px;
+  border-radius: 28px;
+  font-size: 20px;
+}
+.cta-orange:hover {
+  opacity: 0.95;
+}
+.search-card .form-control:focus {
+  border-color: #66afe9;
+  box-shadow: 0 0 0 0.2rem rgba(102, 175, 233, 0.12);
+  outline: none;
+}
+.btn-primary.btn-lg {
+  padding: 0.85rem 1.25rem;
+  border-radius: 10px;
+  box-shadow: 0 6px 18px rgba(0, 123, 255, 0.12);
+}
+.ui-autocomplete {
+  z-index: 30000;
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  background-color: #fff;
+  border: 1px solid #ccc;
+  border-radius: 4px;
+}
+@media (max-width: 992px) {
+  .services-overlay {
+  top: 10%;
+    padding: 12px;
+  }
+  .services-list {
+    gap: 10px;
+  }
+  .service-item .icon {
+    width: 38px;
+    height: 38px;
+  }
+}
+.hero-img {
+  height: 480px;
+  object-fit: cover;
+  filter: brightness(0.7);
+}
+.hero-caption {
+  bottom: 20%;
+}
+.hero-caption h1 {
+  text-shadow: 0 4px 12px rgba(0, 0, 0, 0.45);
+}
+.hero-caption p {
+  text-shadow: 0 2px 8px rgba(0, 0, 0, 0.35);
+}
+.card-img-top {
+  height: 220px;
+  object-fit: cover;
+  border-radius: 8px 8px 0 0;
+}
+.card .card-body {
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.9), #fff);
+}
+.btn-group-toggle .btn {
+  border-radius: 6px;
+}
+.btn-group-toggle .btn.active {
+  background: #f0f8ff;
+}
+/* Swap button */
+#swapLocations {
+  border: 1px solid rgba(0, 0, 0, 0.06);
+}
+
+/* Navbar services styling (compact) */
+.navbar-services .service-link .nav-link { color:#444; display:flex; align-items:center; gap:8px; padding:8px 12px; border-radius:8px; }
+.navbar-services .service-link .nav-link i { width:28px; height:28px; display:inline-flex; align-items:center; justify-content:center; background:#f6f8fa; border-radius:6px; }
+.navbar-services .service-link.active .nav-link { color:#0ea5a4; background:transparent; }
+.navbar-services .service-link .nav-link:hover { background: rgba(0,0,0,0.03); color:#0a72ff; }
+
+
+/* Minor responsive fixes for search layout */
+@media (max-width: 768px) {
+  .select-city h3 {
+    font-size: 20px;
+  }
+  .select-city {
+    padding: 12px;
+  }
+  .cta-orange {
+    padding: 10px 24px;
+    font-size: 16px;
+  }
+}
+
+/* Responsive table fallback: convert tables into stacked cards on small screens */
+@media (max-width: 768px) {
+  .table-responsive { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+  .table thead { display: none; }
+  .table tbody, .table tr { display: block; width: 100%; }
+  .table tr { margin-bottom: 12px; border: 1px solid rgba(0,0,0,0.04); border-radius: 8px; padding: 10px; }
+  .table td { display: flex; justify-content: space-between; padding: 6px 10px; border: none; }
+  .table td::before { content: attr(data-label); font-weight: 600; margin-right: 8px; color: #333; }
+}

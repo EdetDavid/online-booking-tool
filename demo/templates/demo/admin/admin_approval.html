@@ -1,0 +1,252 @@
+{% extends 'demo/admin/base.html' %}
+{% load static %}
+{% block title %}Pending Admin {% endblock %}
+{% block content %}
+    {% load static %}
+    <link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css">
+    <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;600&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.3/css/all.min.css" />
+    <style>
+        /* Global Container Styling */
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+
+        /* Table Container: General Padding and Scrollable Overflow */
+        .table-container {
+            background: #ffffff;
+
+            border-radius: 12px;
+            overflow-x: auto; /* Enable horizontal scroll */
+            box-shadow: 0 8px 16px rgba(0, 0, 0, 0.1);
+            padding: 30px;
+            margin-top: 30px;
+        }
+
+        /* Headline */
+        h1 {
+            font-size: 2rem; /* Responsive text size */
+            margin-bottom: 25px;
+            color: #007bff;
+            text-align: center;
+        }
+
+        /* Responsive Table */
+        table {
+            width: 100%; /* Full width on all devices */
+            border-collapse: collapse;
+            margin-top: 20px;
+            min-width: 600px; /* Set minimum width */
+        }
+
+        thead {
+            background: #007bff;
+            color: #ffffff;
+        }
+
+        th, td {
+            padding: 1rem; /* More padding for touch screens */
+            text-align: left;
+        }
+
+        th {
+            font-weight: bold;
+            border-bottom: 3px solid #e1e1e1;
+            font-size: 1.125rem; /* Responsive font */
+        }
+
+        td {
+            border-bottom: 2px solid #e1e1e1;
+            font-size: 1rem;
+        }
+
+        /* Alternate Row Colors */
+        tr:nth-child(even) {
+            background-color: #f9f9f9;
+        }
+
+        /* Profile Image Styling */
+        .profile-image {
+            width: 80px;
+            height: 80px;
+            border-radius: 50%;
+            object-fit: cover;
+            border: 3px solid #007bff;
+        }
+
+        /* Button Styling */
+        .btn-approve, .btn-disapprove {
+            padding: 0.75rem 1.5rem; /* Larger touch-friendly buttons */
+            border: none;
+            border-radius: 5px;
+            font-size: 0.875rem;
+            cursor: pointer;
+            transition: background-color 0.3s ease;
+        }
+
+        .btn-approve {
+            background-color: #28a745;
+            color: white;
+            margin-right: 10px;
+            margin-bottom:5px;
+        }
+
+        .btn-disapprove {
+            background-color: #dc3545;
+            color: white;
+        }
+
+        /* Back Button */
+        .btn-back {
+            display: inline-block;
+            background-color: #007bff;
+            color: #ffffff;
+            padding: 12px 25px;
+            border-radius: 8px;
+            font-size: 1rem;
+            text-decoration: none;
+            margin-bottom: 20px;
+            transition: background-color 0.3s ease, transform 0.3s ease;
+            box-shadow: 0 4px 8px rgba(0, 123, 255, 0.2);
+        }
+
+        .btn-back:hover {
+            background-color: #0056b3;
+            transform: translateY(-3px);
+        }
+
+        /* Media Queries for Different Screen Sizes */
+
+        /* Tablets (between 768px and 992px) */
+        @media (max-width: 992px) {
+            th, td {
+                padding: 0.75rem; /* Adjust padding for smaller screens */
+                font-size: 0.95rem;
+            }
+
+            .profile-image {
+                width: 60px;
+                height: 60px;
+            }
+
+            .btn-approve, .btn-disapprove {
+                padding: 0.5rem 1rem;
+                font-size: 0.875rem;
+            }
+        }
+
+        /* Phones (max-width: 768px) */
+        @media (max-width: 768px) {
+            h1 {
+                font-size: 1.75rem; /* Adjust headline for mobile */
+            }
+
+            th, td {
+                padding: 0.5rem; /* Reduce padding */
+                font-size: 0.875rem;
+            }
+
+            .profile-image {
+                width: 50px;
+                height: 50px;
+            }
+
+            .btn-approve, .btn-disapprove {
+                padding: 0.4rem 0.8rem; /* Smaller buttons */
+                font-size: 0.75rem;
+            }
+
+            /* Add Scroll on Mobile */
+            .table-container {
+                overflow-x: auto; /* Horizontal scroll for small screens */
+                width:  80vw !important;
+            }
+
+            table {
+                min-width: 500px; /* Ensure the table doesn't shrink too much */
+                
+            }
+        }
+
+        /* Very Small Devices (max-width: 576px) */
+        @media (max-width: 576px) {
+            h1 {
+                font-size: 1.5rem; /* Smaller headline */
+            }
+
+            th, td {
+                font-size: 0.75rem; /* Smaller text */
+                white-space: nowrap; /* Prevent text wrapping */
+            }
+
+            .profile-image {
+                width: 40px;
+                height: 40px;
+            }
+
+            .btn-approve, .btn-disapprove {
+                padding: 0.3rem 0.6rem; /* Even smaller buttons */
+                font-size: 0.7rem;
+            }
+        }
+    </style>
+
+    <div class="container">
+        <a href="{% url 'admin_profile' %}" class="btn-back">Back to Dashboard</a>
+        <div class="table-container">
+            <h1>Pending Admin Approvals</h1>
+            {% if pending_admins %}
+                <div class="table-responsive">
+                <table class="table table-bordered table-striped">
+                    <thead>
+                        <tr>
+                            <th>Profile Picture</th>
+                            <th>Username</th>
+                            <th>First Name</th>
+                            <th>Last Name</th>
+                            <th>Email</th>
+                            <th>Phone</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for admin in pending_admins %}
+                            <tr>
+                                <td data-label="Profile Picture">
+                                    {% if admin.admin.profile.profile_picture %}
+                                        <img src="{{ admin.admin.profile.profile_picture.url }}"
+                                             alt="{{ admin.admin.username }}'s Profile"
+                                             class="profile-image">
+                                    {% else %}
+                                        <img src="https://www.gravatar.com/avatar/?d=mp&s=200"
+                                             alt="{{ admin.admin.username }}'s Profile"
+                                             class="profile-image">
+                                    {% endif %}
+                                </td>
+                                <td data-label="Username">{{ admin.admin.username }}</td>
+                                <td data-label="First Name">{{ admin.first_name }}</td>
+                                <td data-label="Last Name">{{ admin.last_name }}</td>
+                                <td data-label="Email">{{ admin.admin.email }}</td>
+                                <td data-label="Phone">{{ admin.phone }}</td>
+                                <td data-label="Actions">
+                                    <form method="POST">
+                                        {% csrf_token %}
+                                        <input type="hidden" name="admin_id" value="{{ admin.id }}">
+                                        <button type="submit" name="action" value="approve" class="btn-approve">Approve</button>
+                                        <button type="submit" name="action" value="disapprove" class="btn-disapprove">Disapprove</button>
+                                    </form>
+                                </td>
+                            </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+                </div>
+            {% else %}
+                <p>No pending admins for approval.</p>
+            {% endif %}
+        </div>
+    </div>
+
+{% endblock %}

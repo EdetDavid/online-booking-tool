@@ -1,0 +1,225 @@
+
+
+{% load static %}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Register</title>
+    <link rel="stylesheet" href="{% static 'demo/auth.css' %}" />
+    <link rel="icon" href="{% static 'images/online_booking_tool.png' %}" type="image/x-icon" />
+    <style>
+        /* Set full height and center the form vertically and horizontally */
+        body, html {
+            margin: 0;
+            padding: 0;
+            height: 100%;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            background-color: #f5f5f5; /* Background color for contrast */
+        }
+
+        /* Auth container that stays fixed */
+        .auth-container {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            overflow: hidden; /* Prevent content overflow */
+        }
+
+        /* Form styling with scrollable content */
+        .auth-form {
+            background: white;
+            width: 100%;
+            max-width: 400px;
+            height: 90vh; /* Height relative to the viewport */
+            padding: 20px;
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+            border-radius: 8px;
+            overflow-y: auto; /* Make the form scrollable */
+            display: flex;
+            flex-direction: column;
+        }
+
+        /* Custom scrollbar styles */
+        .auth-form::-webkit-scrollbar {
+            width: 10px; /* Width of the scrollbar */
+        }
+
+        .auth-form::-webkit-scrollbar-track {
+            background: #f0f0f0; /* Track background color */
+            border-radius: 10px;
+        }
+
+        .auth-form::-webkit-scrollbar-thumb {
+            background-color: transparent; /* Scrollbar thumb color */
+            border-radius: 10px;
+            border: 3px solid #f0f0f0; /* Add some padding between thumb and track */
+        }
+
+        .auth-form::-webkit-scrollbar-thumb:hover {
+            background-color: #0056b3; /* Hover color for scrollbar */
+        }
+
+        /* Make form scrollable if needed */
+        .auth-form h2 {
+            text-align: center;
+            margin-bottom: 20px;
+        }
+
+        .form-group {
+            margin-bottom: 15px;
+        }
+
+        .error-message {
+            color: red;
+            font-size: 14px;
+            margin-top: 5px;
+        }
+
+        .btn {
+            padding: 10px;
+            background-color: #007bff;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            margin-top: 20px;
+        }
+
+        .btn:hover {
+            background-color: #0056b3;
+        }
+
+        p {
+            text-align: center;
+        }
+
+        a {
+            color: #007bff;
+            text-decoration: none;
+        }
+
+        a:hover {
+            text-decoration: underline;
+        }
+
+        /* Style for file upload container */
+        .file-upload {
+            position: relative;
+            display: flex;
+            align-items: center;
+        }
+
+        .file-upload input[type="file"] {
+            display: none; /* Hide the default file input */
+        }
+
+        .upload-label {
+            display: inline-block;
+            padding: 10px 15px;
+            border: 2px solid #007bff;
+            border-radius: 4px;
+            background-color: #fff;
+            color: #007bff;
+            cursor: pointer;
+            font-size: 14px;
+            text-align: center;
+            width: 100%;
+            box-sizing: border-box;
+        }
+
+        .upload-label:hover {
+            background-color: #007bff;
+            color: white;
+        }
+    </style>
+</head>
+<body>
+    <div class="auth-container">
+        <div class="auth-form">
+            <h2>Register as a Thrive-Admin</h2>
+            <form method="POST" enctype="multipart/form-data">
+                {% csrf_token %}
+
+                <!-- Username field -->
+                <div class="form-group">
+                    {{ form.username.label_tag }}
+                    {{ form.username }}
+                    {% if form.username.errors %}
+                        <div class="error-message">{{ form.username.errors }}</div>
+                    {% endif %}
+                </div>
+
+                <!-- First Name field -->
+                <div class="form-group">
+                    {{ form.first_name.label_tag }}
+                    {{ form.first_name }}
+                    {% if form.first_name.errors %}
+                        <div class="error-message">{{ form.first_name.errors }}</div>
+                    {% endif %}
+                </div>
+
+                <!-- Last Name field -->
+                <div class="form-group">
+                    {{ form.last_name.label_tag }}
+                    {{ form.last_name }}
+                    {% if form.last_name.errors %}
+                        <div class="error-message">{{ form.last_name.errors }}</div>
+                    {% endif %}
+                </div>
+
+                <!-- Email field -->
+                <div class="form-group">
+                    {{ form.email.label_tag }}
+                    {{ form.email }}
+                    {% if form.email.errors %}
+                        <div class="error-message">{{ form.email.errors }}</div>
+                    {% endif %}
+                </div>
+
+                <!-- Phone field -->
+                <div class="form-group">
+                    {{ form.phone.label_tag }}
+                    {{ form.phone }}
+                    {% if form.phone.errors %}
+                        <div class="error-message">{{ form.phone.errors }}</div>
+                    {% endif %}
+                </div>
+
+              
+                <!-- Password field -->
+                <div class="form-group">
+                    {{ form.password1.label_tag }}
+                    {{ form.password1 }}
+                    {% if form.password1.errors %}
+                        <div class="error-message">{{ form.password1.errors }}</div>
+                    {% endif %}
+                </div>
+
+                <!-- Password confirmation field -->
+                <div class="form-group">
+                    {{ form.password2.label_tag }}
+                    {{ form.password2 }}
+                    {% if form.password2.errors %}
+                        <div class="error-message">{{ form.password2.errors }}</div>
+                    {% endif %}
+                </div>
+
+                <button type="submit" class="btn">Register</button>
+            </form>
+
+            <p>
+                Already have an account? <a href="{% url 'thrive_admin_login' %}">Login here</a>
+            </p>
+        </div>
+    </div>
+</body>
+</html>

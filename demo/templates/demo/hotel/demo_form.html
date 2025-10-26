@@ -1,0 +1,646 @@
+{% load static %}
+{% load user_type_urls %}
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport"
+          content="width=device-width, initial-scale=1, shrink-to-fit=no" />
+  <title>Online Booking Tool - Hotel Booking</title>
+    <!-- Fonts -->
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap"
+          rel="stylesheet" />
+    <!-- Bootstrap CSS -->
+    <link rel="stylesheet"
+          href="https://maxcdn.bootstrapcdn.com/bootstrap/4.0.0/css/bootstrap.min.css" />
+    <!-- jQuery UI CSS -->
+    <link rel="stylesheet"
+          href="https://code.jquery.com/ui/1.12.1/themes/base/jquery-ui.css" />
+    <!-- Font Awesome -->
+    <link rel="stylesheet"
+          href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.3/css/all.min.css" />
+    <link rel="icon"
+          href="{% static 'images/online_booking_tool.png' %}"
+          type="image/x-icon">
+    <!-- Shared custom styles (includes .cta-orange) -->
+    <link rel="stylesheet"
+          type="text/css"
+          href="{% static 'demo/css/home_custom.css' %}" />
+    <style>
+      :root {
+        --primary-color: #3498db;
+        --secondary-color: #2980b9;
+        --text-color: #2c3e50;
+        --error-color: #e74c3c;
+        --background-color: #f8f9fa;
+        --white: #ffffff;
+      }
+
+      * {
+        margin: 0;
+        padding: 0;
+        box-sizing: border-box;
+      }
+
+      body {
+        font-family: "Poppins", sans-serif;
+
+        background: url("{% static 'images/background.jpg' %}") no-repeat center center fixed;
+        background-size: cover;
+        color: var(--text-color);
+        min-height: 100vh;
+      }
+
+      /* Navbar Styles */
+      .navbar {
+        background: rgba(255, 255, 255, 0.8);
+        backdrop-filter: blur(10px);
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+        transition: background-color 0.3s ease;
+      }
+
+      .navbar:hover {
+        background: rgba(255, 255, 255, 1);
+      }
+
+      .navbar-brand {
+        font-size: 1.5rem;
+        font-weight: bold;
+        color: #007bff;
+      }
+
+      .navbar-nav .nav-link {
+        font-size: 1.1rem;
+        margin-left: 1.5rem;
+        color: #555;
+        transition: color 0.3s ease;
+      }
+
+      .navbar-nav .nav-link:hover {
+        color: #007bff;
+      }
+
+      .navbar-toggler {
+        border: none;
+      }
+
+      .navbar-nav .fa-shopping-cart {
+        font-size: 1.3rem;
+        color: #ffcc00;
+      }
+
+      .navbar .login-btn {
+        font-size: 1.1rem;
+        padding: 0.5rem 1rem;
+        border-radius: 25px;
+        color: white;
+        background-color: #007bff;
+        transition: background-color 0.3s ease;
+      }
+
+      .navbar .login-btn:hover {
+        background-color: #0056b3;
+      }
+
+      .navbar .username-text {
+        font-size: 1.1rem;
+        color: #007bff;
+        margin-right: 1rem;
+      }
+
+      .navbar .username-dropdown {
+        font-size: 1rem;
+        color: #555;
+      }
+
+      .navbar .dropdown-menu a:hover {
+        background-color: #f0f0f0;
+      }
+
+      .navbar-toggler,
+      .navbar-toggler:focus,
+      .navbar-toggler:active,
+      .navbar-toggler-icon:focus {
+        outline: none !important;
+        box-shadow: none !important;
+        border: none !important;
+      }
+
+      /* Hotel Search Container Styles */
+      .hotel-search-container {
+        min-height: 100vh;
+        display: flex;
+        align-items: center;
+        
+        background: linear-gradient(
+            135deg,
+            rgba(0, 0, 0, 0.7) 0%,
+            rgba(0, 0, 0, 0.4) 100%
+          ),
+          url("{% static 'images/hotel-background.avif' %}") no-repeat center
+            center;
+        background-size: cover;
+        padding: 100px 0 40px 0; /* Adjusted top padding for navbar */
+        position: relative;
+        overflow: hidden;
+      }
+
+      .hotel-search-container::before {
+        content: "";
+        position: absolute;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        background: radial-gradient(
+          circle at center,
+          transparent 0%,
+          rgba(0, 0, 0, 0.4) 100%
+        );
+      }
+
+      .search-card {
+        background: rgba(255, 255, 255, 0.95);
+        border-radius: 20px;
+        box-shadow: 0 20px 40px rgba(0, 0, 0, 0.2);
+        padding: 2.5rem;
+        backdrop-filter: blur(10px);
+        border: 1px solid rgba(255, 255, 255, 0.2);
+        transform: translateY(0);
+        transition: all 0.3s ease;
+        animation: fadeIn 0.8s ease-out;
+        position: relative;
+        width: 600px;
+        margin: 20px auto;
+        z-index: 1;
+      }
+
+      .search-card:hover {
+        transform: translateY(-5px);
+        box-shadow: 0 25px 50px rgba(0, 0, 0, 0.25);
+      }
+
+      .login-heading {
+        color: var(--text-color);
+        font-weight: 600;
+        text-align: center;
+        margin-bottom: 2rem;
+        font-size: 2rem;
+        position: relative;
+      }
+
+      .login-heading::after {
+        content: "";
+        display: block;
+        width: 50px;
+        height: 3px;
+        background: var(--primary-color);
+        margin: 10px auto;
+        border-radius: 2px;
+      }
+
+      .form-label-group {
+        position: relative;
+        margin-bottom: 1.5rem;
+        animation: fadeIn 0.8s ease-out;
+        animation-fill-mode: both;
+      }
+
+      .form-label-group:nth-child(1) {
+        animation-delay: 0.2s;
+      }
+      .form-label-group:nth-child(2) {
+        animation-delay: 0.4s;
+      }
+      .form-label-group:nth-child(3) {
+        animation-delay: 0.6s;
+      }
+
+      .form-label-group input {
+        height: 55px;
+        border-radius: 12px;
+        border: 2px solid #e0e0e0;
+        padding: 15px 20px;
+        font-size: 1rem;
+        transition: all 0.3s ease;
+        width: 100%;
+        color: var(--text-color);
+      }
+
+      .form-label-group input:focus {
+        border-color: var(--primary-color);
+        box-shadow: 0 0 0 3px rgba(52, 152, 219, 0.2);
+        outline: none;
+      }
+
+      .form-label-group input:hover {
+        border-color: #bdc3c7;
+      }
+
+      .form-label-group label {
+        position: absolute;
+        top: -12px;
+        left: 15px;
+        background: var(--white);
+        padding: 0 8px;
+        font-size: 0.85rem;
+        color: #666;
+        font-weight: 500;
+        transition: all 0.3s ease;
+      }
+
+      .btn-login {
+        height: 55px;
+        border-radius: 12px;
+        background: linear-gradient(
+          45deg,
+          var(--primary-color),
+          var(--secondary-color)
+        );
+        border: none;
+        font-size: 1.1rem;
+        font-weight: 600;
+        letter-spacing: 1px;
+        transition: all 0.3s ease;
+        box-shadow: 0 5px 15px rgba(52, 152, 219, 0.3);
+        width: 100%;
+        color: var(--white);
+        animation: fadeIn 0.8s ease-out 0.8s both;
+      }
+
+      .btn-login:hover {
+        background: linear-gradient(
+          45deg,
+          var(--secondary-color),
+          var(--primary-color)
+        );
+        transform: translateY(-2px);
+        box-shadow: 0 8px 20px rgba(52, 152, 219, 0.4);
+      }
+
+      .btn-login:disabled {
+        opacity: 0.7;
+        cursor: not-allowed;
+      }
+
+      .messages {
+        list-style: none;
+        padding: 0;
+        margin-bottom: 1.5rem;
+      }
+
+      .text-danger {
+        color: var(--error-color);
+        padding: 0.8rem;
+        border-radius: 8px;
+        background-color: rgba(231, 76, 60, 0.1);
+        font-size: 0.9rem;
+        display: flex;
+        align-items: center;
+        margin-bottom: 1rem;
+      }
+
+      .text-danger::before {
+        content: "⚠️";
+        margin-right: 8px;
+      }
+
+      .ui-autocomplete {
+        max-height: 300px;
+        overflow-y: auto;
+        overflow-x: hidden;
+        z-index: 9999;
+        border-radius: 12px;
+        box-shadow: 0 10px 25px rgba(0, 0, 0, 0.1);
+        border: none;
+        padding: 8px;
+        background: var(--white);
+      }
+
+      .ui-menu-item {
+        padding: 8px 12px;
+        border-radius: 8px;
+        transition: all 0.2s ease;
+        cursor: pointer;
+      }
+
+      .ui-menu-item:hover {
+        background-color: var(--background-color);
+      }
+
+      @keyframes fadeIn {
+        from {
+          opacity: 0;
+          transform: translateY(20px);
+        }
+        to {
+          opacity: 1;
+          transform: translateY(0);
+        }
+      }
+
+      @media (max-width: 768px) {
+        .search-card {
+          padding: 1.5rem;
+          margin: 1rem;
+        }
+
+        .login-heading {
+          font-size: 1.5rem;
+        }
+
+        .form-label-group input {
+          height: 50px;
+          font-size: 0.9rem;
+        }
+
+        .btn-login {
+          height: 50px;
+          font-size: 1rem;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <!-- Navigation -->
+    <nav class="navbar navbar-expand-lg fixed-top">
+      <a class="navbar-brand" href="{% url 'home' %}">
+  <img src="{% static 'images/online_booking_tool.png' %}"
+       width="40"
+       height="40"
+       alt="Online Booking Tool Logo" />
+   Online Booking Tool 
+      </a>
+      <button class="navbar-toggler"
+              type="button"
+              data-toggle="collapse"
+              data-target="#navbarNav">
+        <span class="navbar-toggler-icon">
+          <i class="fas fa-bars text-dark"></i>
+        </span>
+      </button>
+      <div class="collapse navbar-collapse" id="navbarNav">
+        <ul class="navbar-nav mx-auto">
+          <li class="nav-item">
+            <a class="nav-link" href="{% url 'home' %}">Home</a>
+          </li>
+          <li class="nav-item">
+            <a class="nav-link" href="{% url "home" %}">Flights</a>
+          </li>
+          <li class="nav-item">
+            <a class="nav-link" href="{% url 'hotel' %}">Hotels</a>
+          </li>
+          <li class="nav-item">
+            <a class="nav-link"
+               href="#"
+               data-toggle="modal"
+               data-target="#cartModal">
+              <i class="fas fa-shopping-cart"></i>
+            </a>
+          </li>
+        </ul>
+        <ul class="navbar-nav ml-auto">
+          {% if user.is_authenticated %}
+            <li class="nav-item dropdown">
+              <a class="nav-link username-text dropdown-toggle"
+                 href="#"
+                 id="userDropdown"
+                 role="button"
+                 data-toggle="dropdown"
+                 aria-haspopup="true"
+                 aria-expanded="false">Signed in as: {{ user.username }}</a>
+              <div class="dropdown-menu dropdown-menu-right username-dropdown"
+                   aria-labelledby="userDropdown">
+                <a class="dropdown-item" href="{% get_profile_url user %}">Profile</a>
+                <a class="dropdown-item" href="{% url 'logout' %}">Logout</a>
+              </div>
+            </li>
+          {% else %}
+            <li class="nav-item">
+              <a class="btn login-btn" href="{% url 'login' %}">Login</a>
+            </li>
+          {% endif %}
+        </ul>
+      </div>
+    </nav>
+    <nav class="navbar navbar-expand-lg fixed-top"
+         role="navigation"
+         aria-label="Main navigation">
+      <a class="navbar-brand" href="{% url 'home' %}">
+  <img src="{% static 'images/online_booking_tool.png' %}"
+       width="40"
+       height="40"
+       alt="Online Booking Tool Logo" />
+     Online Booking Tool
+      </a>
+      <button class="navbar-toggler "
+              type="button"
+              data-toggle="collapse"
+              data-target="#navbarNav">
+        <span class="navbar-toggler-icon">
+          <i class="fas fa-bars text-dark"> </i>
+        </span>
+      </button>
+      <div class="collapse navbar-collapse" id="navbarNav">
+        <ul class="navbar-nav mx-auto" role="menubar">
+          <li class="nav-item" role="none">
+            <a class="nav-link focus-outline"
+               role="menuitem"
+               href="#"
+               aria-label="Open cart"
+               data-toggle="modal"
+               data-target="#cartModal">
+              <i class="fas fa-shopping-cart" aria-hidden="true"></i>
+            </a>
+          </li>
+        </ul>
+        <!-- Services as navbar links -->
+        <ul class="navbar-nav mx-auto navbar-services d-none d-lg-flex"
+            style="gap:18px;
+                   align-items:center;
+                   margin-left:20px">
+          <li class="nav-item service-link active">
+            <a class="nav-link" href="{% url 'home' %}"><i class="fas fa-plane"></i> Flight</a>
+          </li>
+          <li class="nav-item service-link">
+            <a class="nav-link" href="{% url 'hotel' %}"><i class="fas fa-hotel"></i> Stays</a>
+          </li>
+          <li class="nav-item service-link">
+            <a class="nav-link" href="{% url 'coming_soon' %}"><i class="fas fa-car"></i> Rides</a>
+          </li>
+          <li class="nav-item service-link">
+            <a class="nav-link" href="{% url 'coming_soon' %}"><i class="fas fa-umbrella-beach"></i> Holidays</a>
+          </li>
+          <li class="nav-item service-link">
+            <a class="nav-link" href="{% url 'coming_soon' %}"><i class="fas fa-suitcase-rolling"></i> Extras</a>
+          </li>
+        </ul>
+        <!-- Login Button or Username Display -->
+        <ul class="navbar-nav ml-auto">
+          {% if user.is_authenticated %}
+            <li class="nav-item dropdown">
+              <a class="nav-link username-text dropdown-toggle"
+                 href="#"
+                 id="userDropdown"
+                 role="button"
+                 data-toggle="dropdown"
+                 aria-haspopup="true"
+                 aria-expanded="false">Signed in as: {{ user.username }}</a>
+              <div class="dropdown-menu dropdown-menu-right username-dropdown"
+                   aria-labelledby="userDropdown">
+                <a class="dropdown-item" href="{% get_profile_url user %}">Profile</a>
+                <a class="dropdown-item" href="{% url 'logout' %} ">Logout</a>
+              </div>
+            </li>
+          {% else %}
+            <li class="nav-item">
+              <a class="btn login-btn focus-outline"
+                 href="{% url 'login' %}"
+                 role="button"
+                 aria-label="Login">Login</a>
+            </li>
+          {% endif %}
+        </ul>
+      </div>
+    </nav>
+    <!-- Cart Modal -->
+    <div class="modal fade"
+         id="cartModal"
+         tabindex="-1"
+         aria-labelledby="cartModalLabel"
+         aria-hidden="true">
+      <div class="modal-dialog">
+        <div class="modal-content">
+          <div class="modal-header">
+            <h5 class="modal-title" id="cartModalLabel">Your Cart</h5>
+            <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+              <span aria-hidden="true">&times;</span>
+            </button>
+          </div>
+          <div class="modal-body">
+            <p>Your cart is currently empty.</p>
+          </div>
+          <div class="modal-footer">
+            <button type="button" class="btn btn-primary" data-dismiss="modal">Continue Shopping</button>
+            <button type="button" class="btn btn-primary">Checkout</button>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="hotel-search-container">
+      <div class="container">
+        <div class="row justify-content-center">
+          <div class="col-md-8 col-lg-6">
+            <div class="search-card">
+              {% if messages %}
+                <ul class="messages">
+                  {% for message in messages %}<li class="text-danger">{{ message }}</li>{% endfor %}
+                </ul>
+              {% endif %}
+              <h3 class="login-heading">Online Booking Tool - Hotel Booking</h3>
+              <form action="" method="POST" id="form_id">
+                {% csrf_token %}
+                <div class="d-flex flex-wrap align-items-stretch" style="gap:16px;">
+                  <div class="select-city flex-fill">
+                    <label class="d-block">Destination</label>
+                    <h3 id="fromLabel">Select City</h3>
+                    <small>Enter city or area</small>
+                    <div class="input-with-icon mt-2" style="max-width:100%;">
+                      <i class="fa fa-hotel"></i>
+                      <input type="text"
+                             name="Origin"
+                             id="inputOrigin"
+                             class="form-control"
+                             placeholder="Where do you want to go?"
+                             required
+                             autofocus />
+                    </div>
+                  </div>
+                  <div class="d-flex" style="flex:0 0 420px; gap:12px; align-items:center;">
+                    <div class="p-2" style="flex:1; background:transparent;">
+                      <label>Check-in</label>
+                      <div>
+                        <strong id="depDateDisplay">--</strong>
+                      </div>
+                      <input type="date"
+                             name="Checkindate"
+                             id="idCheckindate"
+                             class="form-control mt-2"
+                             required />
+                    </div>
+                    <div class="p-2" style="flex:1; background:transparent;">
+                      <label>Check-out</label>
+                      <div>
+                        <strong id="retDateDisplay">--</strong>
+                      </div>
+                      <input type="date"
+                             name="Checkoutdate"
+                             id="idCheckoutdate"
+                             class="form-control mt-2"
+                             required />
+                    </div>
+                  </div>
+                </div>
+                <div class="d-flex justify-content-center mt-3">
+                  <button class="cta-orange" type="submit" id="searchSubmit">SEARCH</button>
+                </div>
+                <div class="d-flex justify-content-center mt-2">
+                  <div class="form-check">
+                    <input class="form-check-input" type="checkbox" value="1" id="flexibleDates">
+                    <label class="form-check-label" for="flexibleDates">My dates are flexible (+/- 3 days)</label>
+                  </div>
+                </div>
+              </form>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <!-- Scripts -->
+    <script src="https://code.jquery.com/jquery-3.4.1.js"></script>
+    <script src="https://code.jquery.com/ui/1.12.1/jquery-ui.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/popper.js/1.12.9/umd/popper.min.js"></script>
+    <script src="https://maxcdn.bootstrapcdn.com/bootstrap/4.0.0/js/bootstrap.min.js"></script>
+    <script>
+      $(document).ready(function () {
+        // simple behavior parity with flight form
+        var today = new Date().toISOString().split('T')[0];
+        $('#idCheckindate').attr('min', today);
+
+        $('#idCheckindate').on('change', function() {
+          var v = $(this).val();
+          $('#idCheckoutdate').attr('min', v || today);
+          if ($('#idCheckoutdate').val() && $('#idCheckoutdate').val() < v) { $('#idCheckoutdate').val(v); }
+          $('#depDateDisplay').text(v || '--');
+        });
+        $('#idCheckoutdate').on('change', function(){ var v = $(this).val(); $('#retDateDisplay').text(v || '--'); });
+
+        // Autocomplete for destination (uses city_search view)
+        $('#inputOrigin').autocomplete({
+          source: "{% url 'city_search' %}",
+          minLength: 1,
+          delay: 200
+        });
+
+        // Guest count selector removed
+
+        // Flexible dates attribute toggle
+        $('#flexibleDates').on('change', function(){ if ($(this).is(':checked')) { $('#idCheckindate,#idCheckoutdate').attr('data-flexible','1'); } else { $('#idCheckindate,#idCheckoutdate').removeAttr('data-flexible'); } });
+
+        // Update city label live
+        function normalizeCityLabel(val) { if (!val) return 'Select City'; return val.length<=3?val.toUpperCase():val; }
+        $('#inputOrigin').on('input change blur', function(){ $('#fromLabel').text(normalizeCityLabel($(this).val())); });
+
+        // Submit behavior: show spinner and allow original submission
+        $('#form_id').on('submit', function(e){
+          e.preventDefault();
+          var $btn = $('#searchSubmit');
+          $btn.addClass('loading').prop('disabled', true).html('SEARCH');
+          // keep small delay so user sees effect
+          var self = $(this);
+          setTimeout(function(){ self.off('submit').submit(); }, 300);
+        });
+      });
+    </script>
+  </body>
+</html>
