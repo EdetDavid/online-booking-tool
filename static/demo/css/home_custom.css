@@ -197,11 +197,40 @@ body {
   border-radius: 16px;
   padding: 18px;
 }
+.passenger-input-group {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
 .passenger-input-group .btn {
-  border-radius: 12px;
+  border-radius: 10px;
+  width: 44px;
+  height: 44px;
+  padding: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid rgba(15, 23, 42, 0.08);
+  background: #fff;
+  color: #0f172a;
+  box-shadow: 0 6px 14px rgba(15, 23, 42, 0.06);
+}
+.passenger-input-group .btn:focus {
+  box-shadow: 0 8px 20px rgba(15,23,42,0.12);
 }
 .passenger-input-group .form-control {
-  max-width: 90px;
+  width: 72px;
+  max-width: 100px;
+  height: 44px;
+  text-align: center;
+  border-radius: 8px;
+  padding: 6px 8px;
+}
+
+/* Tighter layout for very small screens */
+@media (max-width: 480px) {
+  .passenger-input-group .btn { width: 40px; height: 40px; }
+  .passenger-input-group .form-control { width: 56px; height: 40px; }
 }
 .swap-button {
   width: 54px;
