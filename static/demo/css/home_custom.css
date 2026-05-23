@@ -118,22 +118,102 @@ body {
 }
 .select-city {
   background: #fff;
-  border-radius: 8px;
-  padding: 24px;
-  box-shadow: none;
-  border: none;
+  border-radius: 16px;
+  padding: 20px 20px 18px;
+  box-shadow: 0 14px 35px rgba(15, 23, 42, 0.06);
+  border: 1px solid rgba(15, 23, 42, 0.08);
   text-align: left;
 }
-.select-city h3 {
-  font-size: 28px;
-  margin: 0;
-  font-weight: 700;
-  color: #111;
+.form-label {
+  font-size: 0.95rem;
+  font-weight: 600;
+  color: #121827;
 }
-.select-city small {
-  display: block;
-  color: #777;
-  margin-top: 6px;
+.form-preview {
+  margin: 0.3rem 0 0.15rem;
+  font-size: 1.35rem;
+  font-weight: 700;
+  line-height: 1.1;
+  color: #0f172a;
+}
+.field-block {
+  min-height: 100%;
+}
+.input-with-outer {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.input-with-outer .outer-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 52px;
+  height: 52px;
+  background: #fff;
+  border-radius: 16px;
+  border: 1px solid rgba(15, 23, 42, 0.08);
+  box-shadow: 0 6px 16px rgba(15, 23, 42, 0.08);
+  color: #ff5e00;
+  flex-shrink: 0;
+}
+.input-with-outer .outer-icon i {
+  font-size: 1.15rem;
+}
+.input-with-outer input {
+  flex: 1;
+}
+.trip-type-row {
+  gap: 16px;
+}
+.trip-type-group label {
+  min-width: 98px;
+  border-radius: 999px;
+  border: 1px solid rgba(15, 23, 42, 0.08);
+  color: #374151;
+  padding: 10px 18px;
+  margin-bottom: 0;
+}
+.trip-type-group label.active,
+.trip-type-group label:hover {
+  background: #f8fafc;
+  color: #0f172a;
+  border-color: rgba(59, 130, 246, 0.3);
+}
+.trip-type-group input {
+  position: absolute;
+  clip: rect(0, 0, 0, 0);
+  pointer-events: none;
+}
+.cabins-dropdown select {
+  min-width: 180px;
+  border-radius: 999px;
+  padding: 10px 16px;
+}
+.date-block,
+.passenger-block {
+  background: #f8fbff;
+  border: 1px solid rgba(15, 23, 42, 0.08);
+  border-radius: 16px;
+  padding: 18px;
+}
+.passenger-input-group .btn {
+  border-radius: 12px;
+}
+.passenger-input-group .form-control {
+  max-width: 90px;
+}
+.swap-button {
+  width: 54px;
+  height: 54px;
+  padding: 0;
+  border-radius: 50%;
+  border: 1px solid rgba(15, 23, 42, 0.1);
+  color: #0f172a;
+  box-shadow: 0 12px 20px rgba(15, 23, 42, 0.08);
+}
+.swap-button i {
+  font-size: 1.1rem;
 }
 .cta-orange {
   background: linear-gradient(90deg, #ff8a00, #ff5e00);
@@ -153,9 +233,39 @@ body {
   outline: none;
 }
 .btn-primary.btn-lg {
-  padding: 0.85rem 1.25rem;
-  border-radius: 10px;
+  padding: 0.95rem 1.35rem;
+  border-radius: 12px;
   box-shadow: 0 6px 18px rgba(0, 123, 255, 0.12);
+}
+#toast-container {
+  position: fixed;
+  right: 1rem;
+  top: 1rem;
+  z-index: 20000;
+}
+.toast-card {
+  background: #fff;
+  border-left: 6px solid #0ea5e9;
+  border-radius: 6px;
+  box-shadow: 0 10px 24px rgba(15, 23, 42, 0.16);
+  margin-bottom: 8px;
+  min-width: 260px;
+  padding: 12px 14px;
+}
+.toast-success {
+  border-left-color: #22c55e;
+}
+.toast-error {
+  border-left-color: #ef4444;
+}
+.toast-close {
+  background: transparent;
+  border: 0;
+  color: #64748b;
+  cursor: pointer;
+  float: right;
+  font-size: 18px;
+  line-height: 1;
 }
 .ui-autocomplete {
   z-index: 30000;

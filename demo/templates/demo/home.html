@@ -311,19 +311,28 @@
     // Check if user is authenticated
     var isAuthenticated = "{{ user.is_authenticated }}";
     
-    // If user is not authenticated, prevent form submission and display message
     if (isAuthenticated === "False") {
-      event.preventDefault(); // Prevent form submission
-      
-      // Show the message box
-      var messageBox = document.getElementById("authMessage");
-      messageBox.style.display = "block";
-      
-      // Redirect to login page after 2 seconds
+      event.preventDefault();
+      showToast('You need to log in to submit the form. Redirecting to login page...', 'error');
       setTimeout(function() {
         window.location.href = "{% url 'login' %}";
-      }, 2000); // 2-second delay before redirect
+      }, 2000);
     }
+  }
+
+  function showToast(message, type, timeout) {
+    var container = document.getElementById('toast-container');
+    if (!container) {
+      alert(message);
+      return;
+    }
+    var card = document.createElement('div');
+    card.className = 'toast-card toast-' + (type || 'info');
+    card.setAttribute('role', 'status');
+    card.innerHTML = '<button type="button" class="toast-close" aria-label="Close">&times;</button><div>' + message + '</div>';
+    card.querySelector('.toast-close').onclick = function () { card.remove(); };
+    container.appendChild(card);
+    setTimeout(function () { if (card.parentNode) card.remove(); }, timeout || 4000);
   }
     </script>
   </head>
@@ -481,14 +490,9 @@
             <div class="search-card">
               <form action="" method="POST" id="form_id" onsubmit="checkAuth(event)">
                 {% csrf_token %}
-                <div id="authMessage" style="display: none; text-align: center; color: red; font-size: 16px; background-color: #f8d7da; padding: 10px; border-radius: 5px; margin-top: 10px">You need to log in to submit the form. Redirecting to login page...</div>
-                {% if messages %}
-                  <div class="error-message"><ul>{% for message in messages %}<li>{{ message }}</li>{% endfor %}</ul></div>
-                {% endif %}
 
-                <!-- Top controls: trip type radios + cabin class dropdown -->
-                <div class="d-flex justify-content-between align-items-center mb-3" style="gap:12px;">
-                  <div class="btn-group btn-group-toggle" data-toggle="buttons">
+                <div class="d-flex flex-wrap align-items-center justify-content-between trip-type-row mb-3">
+                  <div class="btn-group btn-group-toggle trip-type-group" data-toggle="buttons" role="group" aria-label="Trip type">
                     <label class="btn btn-light active">
                       <input type="radio" name="tripTypeRadio" id="trip_oneway" value="one-way" autocomplete="off"> One Way
                     </label>
@@ -499,8 +503,8 @@
                       <input type="radio" name="tripTypeRadio" id="trip_multi" value="multi-city" autocomplete="off"> Multi City
                     </label>
                   </div>
-                  <div>
-                    <select class="form-control" id="cabinClassTop" name="cabinClassTop" aria-label="Cabin class" style="min-width:160px;">
+                  <div class="cabins-dropdown">
+                    <select class="form-control" id="cabinClassTop" name="cabinClassTop" aria-label="Cabin class">
                       <option value="economy">Economy</option>
                       <option value="premium_economy">Premium Economy</option>
                       <option value="business">Business</option>
@@ -509,56 +513,65 @@
                   </div>
                 </div>
 
-                <div class="d-flex flex-wrap align-items-stretch" style="gap:16px;">
-                  <div class="select-city flex-fill">
-                    <label class="d-block">From</label>
-                    <h3 id="fromLabel">Select City</h3>
-                    <small>Enter city or airport</small>
-                      <div class="input-with-outer d-flex align-items-center mt-2">
-                        <span class="outer-icon"><i class="fa fa-plane" aria-hidden="true"></i></span>
-                        <input type="text" class="form-control flex-fill" id="inputOrigin" name="Origin" required placeholder="City or airport code" aria-label="Departure city">
+                <div class="row g-3 align-items-center">
+                  <div class="col-lg-5">
+                    <div class="select-city field-block">
+                      <label class="form-label">From</label>
+                      <h3 class="form-preview" id="fromLabel">Select City</h3>
+                      <small class="text-muted">Search keyword</small>
+                      <div class="input-with-outer mt-2">
+                        <span class="outer-icon"><i class="fa fa-plane"></i></span>
+                        <input type="text" class="form-control" id="inputOrigin" name="Origin" required placeholder="City or airport code" aria-label="Departure city">
                       </div>
+                    </div>
                   </div>
-                  <div class="swap-wrap d-flex align-items-center justify-content-center px-2">
+                  <div class="col-auto d-flex justify-content-center">
                     <button type="button" id="swapLocations" class="swap-button btn btn-light" aria-label="Swap origin and destination">
-                      <i class="fa fa-exchange-alt" aria-hidden="true"></i>
+                      <i class="fa fa-exchange-alt"></i>
                     </button>
                   </div>
-                  <div class="select-city flex-fill">
-                    <label class="d-block">To</label>
-                    <h3 id="toLabel">Select City</h3>
-                    <small>Enter city or airport</small>
-                    <div class="input-with-outer d-flex align-items-center mt-2">
-                      <span class="outer-icon"><i class="fa fa-map-marker-alt" aria-hidden="true"></i></span>
-                      <input type="text" class="form-control flex-fill" id="inputDestination" name="Destination" required placeholder="City or airport code" aria-label="Destination city">
-                    </div>
-                  </div>
-                  <div class="d-flex search-controls-row align-items-center">
-                    <div class="date-block">
-                      <label>Departure</label>
-                      <div><strong id="depDateDisplay">--</strong></div>
-                      <input type="date" name="Departuredate" id="idDeparturedate" class="form-control mt-2" required />
-                    </div>
-                    <div class="date-block">
-                      <label>Return</label>
-                      <div><strong id="retDateDisplay">--</strong></div>
-                      <input type="date" name="Returndate" id="idReturndate" class="form-control mt-2" />
-                      <!-- hidden select fallback to keep server-side expectations if any -->
-                      <select id="tripType" name="tripType" class="d-none">
-                        <option value="one-way">One-Way</option>
-                        <option value="round-trip" selected>Round-Trip</option>
-                        <option value="multi-city">Multi-City</option>
-                      </select>
-                    </div>
-                    <div class="passenger-block">
-                      <label>Passenger</label>
-                      <input type="number" class="form-control mt-2" id="passengerCount" name="passengerCount" value="1" min="1" />
+                  <div class="col-lg-5">
+                    <div class="select-city field-block">
+                      <label class="form-label">To</label>
+                      <h3 class="form-preview" id="toLabel">Select City</h3>
+                      <small class="text-muted">Search keyword</small>
+                      <div class="input-with-outer mt-2">
+                        <span class="outer-icon"><i class="fa fa-map-marker-alt"></i></span>
+                        <input type="text" class="form-control" id="inputDestination" name="Destination" required placeholder="City or airport code" aria-label="Destination city">
+                      </div>
                     </div>
                   </div>
                 </div>
 
-                <div class="d-flex justify-content-center mt-3">
-                  <button class="cta-orange" type="submit" id="searchSubmit">SEARCH</button>
+                <div class="row g-3 align-items-end mt-3">
+                  <div class="col-md-4">
+                    <div class="date-block field-block">
+                      <label class="form-label">Departure</label>
+                      <input type="date" name="Departuredate" id="idDeparturedate" class="form-control mt-2" required />
+                    </div>
+                  </div>
+                  <div class="col-md-4">
+                    <div class="date-block field-block">
+                      <label class="form-label">Return</label>
+                      <input type="date" name="Returndate" id="idReturndate" class="form-control mt-2" />
+                    </div>
+                  </div>
+                  <div class="col-md-4">
+                    <div class="passenger-block field-block">
+                      <label class="form-label">Passengers</label>
+                      <div class="input-group mt-2 passenger-input-group">
+                        <button type="button" class="btn btn-outline-secondary" id="decreasePassengers"><i class="fa fa-minus"></i></button>
+                        <input type="number" class="form-control text-center" id="passengerCount" name="passengerCount" value="1" min="1" />
+                        <button type="button" class="btn btn-outline-secondary" id="increasePassengers"><i class="fa fa-plus"></i></button>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                <input type="hidden" id="tripType" name="tripType" value="round-trip" />
+
+                <div class="d-grid mt-3">
+                  <button class="cta-orange btn btn-primary btn-lg" type="submit" id="searchSubmit">SEARCH</button>
                 </div>
                 <div class="d-flex justify-content-center mt-2">
                   <div class="form-check">
@@ -818,6 +831,12 @@
             $('#idReturndate').removeAttr('data-flexible');
           }
         });
+
+        {% if messages %}
+            {% for message in messages %}
+                showToast("{{ message|escapejs }}", "{{ message.tags|default:'info' }}");
+            {% endfor %}
+        {% endif %}
 
       });
     </script>
