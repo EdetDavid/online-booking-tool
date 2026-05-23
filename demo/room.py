@@ -1,3 +1,6 @@
+from .hotel import format_price_naira
+
+
 class Room:
     def __init__(self, rooms):
         self.rooms = rooms
@@ -7,10 +10,16 @@ class Room:
         try:
             for room in self.rooms[0]['offers']:
                 offer = {}
-                offer['price'] = room['price']['total']
-                offer['description'] = room['room']['description']['text']
+                price = room['price']
+                offer['price'] = format_price_naira(
+                    price.get('total'),
+                    price.get('currency', 'USD'),
+                )
+                room_info = room.get('room', {})
+                description = room_info.get('description', {}).get('text')
+                offer['description'] = description or room_info.get('type', 'Hotel room')
                 offer['offerID'] = room['id']
                 hotel_rooms.append(offer)
-        except (TypeError, AttributeError, KeyError):
+        except (TypeError, AttributeError, KeyError, IndexError):
             pass
         return hotel_rooms

@@ -1,5 +1,6 @@
 {% load static %}
 {% load humanize %}
+{% load user_type_urls %}
 <!DOCTYPE html>
 <html lang="en">
     <head>
@@ -335,7 +336,7 @@
                                 <div class="card-header d-flex justify-content-between align-items-center">
                                     <div>
                                         <span class="price-label">Starting from</span>
-                                        <span class="price">${{ r.price }}</span>
+                                        <span class="price">₦{{ r.price }}</span>
                                     </div>
                                     <a href="{% url 'rooms_per_hotel' r.hotelID departureDate returnDate %}" 
                                        class="show-rooms-button">

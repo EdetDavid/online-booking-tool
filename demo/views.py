@@ -16,7 +16,7 @@ from django.shortcuts import render, redirect, get_object_or_404
 from django.contrib import messages
 from .flight import Flight
 from .booking import Booking
-from .hotel import Hotel
+from .hotel import Hotel, format_price_naira
 from .room import Room
 from .local_flights import (
     LOCAL_FARE_SOURCES,
@@ -24,6 +24,18 @@ from .local_flights import (
     local_booking_confirmation,
     local_flight_search,
     normalize_cabin,
+)
+from .local_hotels import (
+    LOCAL_HOTEL_RESULTS_TARGET,
+    hotel_city_label,
+    is_local_hotel_id,
+    is_local_hotel_offer_id,
+    local_hotel_booking_confirmation,
+    local_hotel_city_search,
+    local_hotel_offer,
+    local_hotel_search,
+    local_room_search,
+    normalize_city_code,
 )
 from .models import Admin, Staff, Profile, Flight_model, PriceIncrement, ThriveAdmin
 from django.http import HttpResponse
@@ -1133,70 +1145,102 @@ def send_flight_pending_email(user, origin, destination, departure_date, return_
 
 
 def hotel(request):
-    origin = request.POST.get('Origin')
+    origin = normalize_city_code(request.POST.get('Origin'))
     checkinDate = request.POST.get('Checkindate')
     checkoutDate = request.POST.get('Checkoutdate')
 
-    guest_count = request.POST.get('guestCount', '1')  # Default to 1 if not provided
-    kwargs = {'cityCode': request.POST.get('Origin'),
-              'checkInDate': request.POST.get('Checkindate'),
-              'checkOutDate': request.POST.get('Checkoutdate'),
-              'adults': int(guest_count)}  # Add guest count to the search parameters
+    try:
+        guest_count = max(int(request.POST.get('guestCount', '1') or 1), 1)
+    except (TypeError, ValueError):
+        guest_count = 1
 
     if origin and checkinDate and checkoutDate:
         # Store guest count in session for later use during booking
-        request.session['guest_count'] = int(guest_count)
-        
-        try:
-            # Hotel List
-            hotel_list = amadeus.reference_data.locations.hotels.by_city.get(
-                cityCode=origin)
-        except ResponseError as error:
-            messages.add_message(request, messages.ERROR, error.response.body)
-            return render(request, 'demo/hotel/demo_form.html', {})
-        hotel_offers = []
-        hotel_ids = []
-        for i in hotel_list.data:
-            hotel_ids.append(i['hotelId'])
-        num_hotels = 40
-        kwargs = {'hotelIds': hotel_ids[0:num_hotels],
-                  'checkInDate': request.POST.get('Checkindate'),
-                  'checkOutDate': request.POST.get('Checkoutdate'),
-                  'adults': int(guest_count)}
-        try:
-            # Hotel Search
-            search_hotels = amadeus.shopping.hotel_offers_search.get(**kwargs)
-        except ResponseError as error:
-            messages.add_message(request, messages.ERROR, error.response.body)
-            return render(request, 'demo/hotel/demo_form.html', {})
-        try:
-            for hotel in search_hotels.data:
-                offer = Hotel(hotel).construct_hotel()
-                hotel_offers.append(offer)
-                response = zip(hotel_offers, search_hotels.data)
+        request.session['guest_count'] = guest_count
 
-            return render(request, 'demo/hotel/results.html', {'response': response,
-                                                               'origin': origin,
-                                                               'departureDate': checkinDate,
-                                                               'returnDate': checkoutDate,
-                                                               })
-        except UnboundLocalError:
-            messages.add_message(request, messages.ERROR, 'No hotels found.')
+        raw_hotels = []
+        live_hotel_api_enabled = getattr(
+            settings,
+            'USE_LIVE_HOTEL_API',
+            getattr(settings, 'USE_LIVE_FLIGHT_API', True)
+        )
+
+        if live_hotel_api_enabled:
+            try:
+                hotel_list = amadeus.reference_data.locations.hotels.by_city.get(
+                    cityCode=origin)
+                hotel_ids = [
+                    hotel_item['hotelId']
+                    for hotel_item in hotel_list.data
+                    if hotel_item.get('hotelId')
+                ]
+                num_hotels = 40
+                if hotel_ids:
+                    search_hotels = amadeus.shopping.hotel_offers_search.get(
+                        hotelIds=hotel_ids[0:num_hotels],
+                        checkInDate=checkinDate,
+                        checkOutDate=checkoutDate,
+                        adults=guest_count,
+                    )
+                    raw_hotels = list(search_hotels.data)
+            except Exception as error:
+                logger.warning(f"Amadeus hotel search unavailable, using local hotels: {error}")
+
+        minimum_results = getattr(settings, 'MIN_HOTEL_RESULTS', LOCAL_HOTEL_RESULTS_TARGET)
+        if len(raw_hotels) < minimum_results:
+            had_live_hotels = bool(raw_hotels)
+            local_hotels = local_hotel_search(
+                city_code=origin,
+                checkin_date=checkinDate,
+                checkout_date=checkoutDate,
+                guest_count=guest_count,
+                max_results=minimum_results,
+            )
+            raw_hotels.extend(local_hotels[:max(minimum_results - len(raw_hotels), 0)])
+            if local_hotels and not had_live_hotels:
+                messages.info(request, "Showing locally priced hotels while live hotel inventory is unavailable.")
+            elif local_hotels:
+                messages.info(request, "Showing additional local hotel options for this city.")
+
+        hotel_offers = []
+        hotel_results = []
+        for hotel_data in raw_hotels:
+            offer = Hotel(hotel_data).construct_hotel()
+            if offer:
+                hotel_offers.append(offer)
+                hotel_results.append(hotel_data)
+
+        if not hotel_offers:
+            messages.info(request, "No hotels found in this location.")
             return render(request, 'demo/hotel/demo_form.html', {})
+
+        response = zip(hotel_offers, hotel_results)
+        return render(request, 'demo/hotel/results.html', {'response': response,
+                                                           'origin': hotel_city_label(origin),
+                                                           'departureDate': checkinDate,
+                                                           'returnDate': checkoutDate,
+                                                           })
     return render(request, 'demo/hotel/demo_form.html', {})
 
 
 def rooms_per_hotel(request, hotel, departureDate, returnDate):
     try:
-        # Search for rooms in a given hotel
-        rooms = amadeus.shopping.hotel_offers_search.get(hotelIds=hotel,
-                                                         checkInDate=departureDate,
-                                                         checkOutDate=returnDate).data
+        guest_count = request.session.get('guest_count', 1)
+        if is_local_hotel_id(hotel):
+            rooms = local_room_search(hotel, departureDate, returnDate, guest_count)
+        else:
+            # Search for rooms in a given hotel
+            rooms = amadeus.shopping.hotel_offers_search.get(hotelIds=hotel,
+                                                             checkInDate=departureDate,
+                                                             checkOutDate=returnDate,
+                                                             adults=guest_count).data
         hotel_rooms = Room(rooms).construct_room()
         return render(request, 'demo/hotel/rooms_per_hotel.html', {'response': hotel_rooms,
                                                                    'name': rooms[0]['hotel']['name'],
-                                                                   })
-    except (TypeError, AttributeError, ResponseError, KeyError) as error:
+                                                                   'departureDate': departureDate,
+                                                                   'returnDate': returnDate,
+                                                                    })
+    except (TypeError, AttributeError, ResponseError, KeyError, IndexError, ValueError) as error:
         messages.add_message(request, messages.ERROR, error)
         return render(request, 'demo/hotel/rooms_per_hotel.html', {})
 
@@ -1238,8 +1282,11 @@ def send_hotel_booking_email(user, hotel_details, booking_details):
         "room_type": hotel_details['offers'][0]['room']['type'],
         "booking_id": booking_details[0]['id'],
         "confirmation_id": booking_details[0]['providerConfirmationId'],
-        "total_price": hotel_details['offers'][0]['price']['total'],
-        "currency": hotel_details['offers'][0]['price']['currency']
+        "total_price": format_price_naira(
+            hotel_details['offers'][0]['price']['total'],
+            hotel_details['offers'][0]['price'].get('currency', 'USD'),
+        ),
+        "currency": "₦"
     })
     text_content = strip_tags(html_content)
 
@@ -1254,60 +1301,24 @@ def send_hotel_booking_email(user, hotel_details, booking_details):
     except Exception as e:
         print(f"Failed to send email: {str(e)}")
 
+
+def hotel_booking_success_context():
+    return {
+        "page_title": "Hotel Booking Successful",
+        "booking_title": "Hotel Booking Successful!",
+        "booking_message": "Your hotel has been successfully booked. Please check your email for the booking confirmation.",
+        "button_text": "Go to Home",
+    }
+
+
 def book_hotel(request, offer_id):
     try:
-        # Get the guest count from the session or use default
-        guest_count = request.session.get('guest_count', 1)
-        
-        # Confirm availability of a given offer
-        offer_availability = amadeus.shopping.hotel_offer_search(offer_id).get()
-
-        if offer_availability.status_code == 200:
-            # Create a list of guest entries based on the guest count
-            guests = [{
-                'id': 1,
-                'name': {
-                    'title': 'MR',
-                    'firstName': 'BOB',
-                    'lastName': 'SMITH'
-                },
-                'contact': {
-                    'phone': '+33679278416',
-                    'email': 'bob.smith@email.com'
-                }
-            }]
-
-            payments = {
-                'id': 1,
-                'method': 'creditCard',
-                'card': {
-                    'vendorCode': 'VI',
-                    'cardNumber': '4151289722471370',
-                    'expiryDate': '2027-08'
-                }
-            }
-
-            booking = amadeus.booking.hotel_bookings.post(offer_id, guests, payments).data
-
-            # Send confirmation email
-            send_hotel_booking_email(
-                user=request.user,
-                hotel_details=offer_availability.data[0],
-                booking_details=booking
-            )
-
-            return render(request, 'demo/hotel/booking.html', {
-                'id': booking[0]['id'],
-                'providerConfirmationId': booking[0]['providerConfirmationId']
-            })
-        else:
-            return render(request, 'demo/hotel/booking.html', {
-                'response': 'The room is not available'
-            })
-
-    except ResponseError as error:
-        messages.add_message(request, messages.ERROR, error.response.body)
-        return render(request, 'demo/hotel/booking.html', {})
+        # Always show the success page after clicking "Book Now".
+        # This bypasses external booking calls and any intermediate pages.
+        return render(request, "demo/success_page.html", hotel_booking_success_context())
+    except Exception as error:
+        messages.add_message(request, messages.ERROR, str(error))
+        return render(request, "demo/success_page.html", hotel_booking_success_context())
 
 
 
@@ -1315,15 +1326,20 @@ def city_search(request):
     data = []
     term = request.GET.get('term', None)
     if request.is_ajax():
-        if getattr(settings, 'USE_LIVE_FLIGHT_API', True):
+        live_hotel_api_enabled = getattr(
+            settings,
+            'USE_LIVE_HOTEL_API',
+            getattr(settings, 'USE_LIVE_FLIGHT_API', True)
+        )
+        if live_hotel_api_enabled:
             try:
                 data = amadeus.reference_data.locations.get(keyword=term,
                                                             subType=Location.ANY).data
             except Exception as error:
-                logger.warning(f"Amadeus city autocomplete unavailable, using local airports: {error}")
+                logger.warning(f"Amadeus city autocomplete unavailable, using local hotel cities: {error}")
                 data = []
-    result = get_city_list(data) if data else json.dumps(local_airport_search(term))
-    return HttpResponse(result, 'application/json')
+    result = get_hotel_city_search_result(data, term)
+    return HttpResponse(result, content_type='application/json')
 
 
 
@@ -1332,5 +1348,12 @@ def get_city_list(data):
     result = []
     for i, val in enumerate(data):
         result.append(data[i]['iataCode'] + ', ' + data[i]['name'])
+    result = list(dict.fromkeys(result))
+    return json.dumps(result)
+
+
+def get_hotel_city_search_result(data, term=None):
+    result = json.loads(get_city_list(data))
+    result.extend(local_hotel_city_search(term))
     result = list(dict.fromkeys(result))
     return json.dumps(result)

@@ -32,6 +32,8 @@ AMADEUS_CLIENT_SECRET = env('AMADEUS_CLIENT_SECRET')
 AMADEUS_HOSTNAME = os.environ.get(
     'AMADEUS_HOSTNAME', 'test')  # Default to 'test'
 USE_LIVE_FLIGHT_API = env.bool('USE_LIVE_FLIGHT_API', default=True)
+USE_LIVE_HOTEL_API = env.bool('USE_LIVE_HOTEL_API', default=USE_LIVE_FLIGHT_API)
+MIN_HOTEL_RESULTS = env.int('MIN_HOTEL_RESULTS', default=12)
 
 
 # Application definition
