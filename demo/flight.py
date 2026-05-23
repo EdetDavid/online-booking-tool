@@ -20,9 +20,24 @@ class Flight:
         index = 0
         offer['price'] = float(self.flight['price']['total']) * 1600 + increment_value  # Increment price dynamically
         offer['id'] = self.flight['id']
+        offer['source'] = self.flight.get('source', 'LIVE_FLIGHT_API')
+        offer['seats'] = self.flight.get('numberOfBookableSeats', 0)
+        offer['cabin'] = get_cabin(self.flight)
+        offer['cabin_display'] = offer['cabin'].replace('_', ' ').title()
+        offer['trip_type'] = 'round-trip' if len(self.flight.get('itineraries', [])) > 1 else 'one-way'
+        offer['airlines'] = ''
+        offer['stops'] = 0
+        airlines = []
 
         for f in self.flight['itineraries']:
             # Keys starting from 0 correspond to Outbound flights and the keys starting from 1 to Return flights
+            segments = self.flight['itineraries'][index]['segments']
+            offer['stops'] += max(len(segments) - 1, 0)
+            for segment in segments:
+                carrier = segment.get('carrierCode')
+                if carrier and carrier not in airlines:
+                    airlines.append(carrier)
+
             if len(self.flight['itineraries'][index]['segments']) == 2:  # One-stop flight
                 offer[str(index) + 'firstFlightDepartureAirport'] = self.flight['itineraries'][index]['segments'][0]['departure']['iataCode']
                 offer[str(index) + 'firstFlightAirlineLogo'] = get_airline_logo(self.flight['itineraries'][index]['segments'][0]['carrierCode'])
@@ -55,6 +70,7 @@ class Flight:
 
             index += 1
 
+        offer['airlines'] = ' '.join(airlines)
         return offer
 
 
@@ -64,6 +80,13 @@ def get_airline_logo(carrier_code):
 
 def get_hour(date_time):
     return datetime.strptime(date_time[0:19], "%Y-%m-%dT%H:%M:%S").strftime("%H:%M")
+
+
+def get_cabin(flight):
+    try:
+        return flight['travelerPricings'][0]['fareDetailsBySegment'][0]['cabin']
+    except (KeyError, IndexError, TypeError):
+        return 'ECONOMY'
 
 
 def get_stoptime(total_duration, first_flight_duration, second_flight_duration):

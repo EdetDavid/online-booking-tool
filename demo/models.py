@@ -97,3 +97,36 @@ class PriceIncrement(models.Model):
     def __str__(self):
         return f'Price Increment: {self.increment_value}'
 
+
+class LocalFlightFare(models.Model):
+    CABIN_CHOICES = [
+        ('ECONOMY', 'Economy'),
+        ('PREMIUM_ECONOMY', 'Premium Economy'),
+        ('BUSINESS', 'Business'),
+        ('FIRST', 'First'),
+    ]
+
+    origin = models.CharField(max_length=3)
+    destination = models.CharField(max_length=3)
+    airline_code = models.CharField(max_length=3, default='B6')
+    airline_name = models.CharField(max_length=100, default='JetBlue')
+    cabin = models.CharField(max_length=20, choices=CABIN_CHOICES, default='ECONOMY')
+    base_price_naira = models.DecimalField(max_digits=12, decimal_places=2)
+    departure_time = models.TimeField()
+    arrival_time = models.TimeField()
+    return_departure_time = models.TimeField(null=True, blank=True)
+    return_arrival_time = models.TimeField(null=True, blank=True)
+    stop_airport = models.CharField(max_length=3, blank=True, default='')
+    flight_duration = models.CharField(max_length=20, default='PT1H15M')
+    return_duration = models.CharField(max_length=20, blank=True, default='')
+    seats_available = models.PositiveIntegerField(default=9)
+    active = models.BooleanField(default=True)
+
+    class Meta:
+        ordering = ['origin', 'destination', 'base_price_naira']
+        indexes = [
+            models.Index(fields=['origin', 'destination', 'cabin', 'active'], name='demo_localf_origin_62574a_idx'),
+        ]
+
+    def __str__(self):
+        return f'{self.origin}-{self.destination} {self.cabin} {self.airline_code} NGN {self.base_price_naira}'

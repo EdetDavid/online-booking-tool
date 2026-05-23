@@ -179,7 +179,8 @@
             </div>
             <form method="post" action="{% url 'approve_flight' %}" id="approvalForm">
                 {% csrf_token %}
-                <table id="flightTable">
+                <div class="table-responsive">
+                <table id="flightTable" class="table table-bordered table-striped">
                     <thead>
                         <tr>
                             <th>Select</th>
@@ -221,7 +222,7 @@
                                 <td data-label="Return Date">{{ flight.return_date|date:"M d, Y" }}</td>
                                 {% comment %} <td data-label="Passenger Count">{{ flight.passenger_count }}</td> {% endcomment %}
                                 {% comment %} <td data-label="Travel Class">{{ flight.travel_class }}</td> {% endcomment %}
-                                <td data-label="Travel Class">₦ {{ flight.price|floatformat:0|intcomma }}</td>
+                                <td data-label="Price">₦ {{ flight.price|floatformat:0|intcomma }}</td>
                                 <td data-label="Approval Status">
                                     {% if flight.approved %}
                                         <span class="status-approved">Approved</span>
@@ -237,6 +238,7 @@
                         {% endfor %}
                     </tbody>
                 </table>
+                </div>
                 <div class="text-center mt-6">
                     <button type="button" class="btn-approve" id="approveButton">Approve Selected</button>
                 </div>
@@ -358,5 +360,3 @@
         function getCellValue(tr, idx) { return tr.children[idx].innerText || tr.children[idx].textContent; }
     </script>
 {% endblock %}
-
-

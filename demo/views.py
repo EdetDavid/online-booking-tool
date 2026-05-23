@@ -18,6 +18,13 @@ from .flight import Flight
 from .booking import Booking
 from .hotel import Hotel
 from .room import Room
+from .local_flights import (
+    LOCAL_FARE_SOURCES,
+    local_airport_search,
+    local_booking_confirmation,
+    local_flight_search,
+    normalize_cabin,
+)
 from .models import Admin, Staff, Profile, Flight_model, PriceIncrement, ThriveAdmin
 from django.http import HttpResponse
 from django.contrib.auth.decorators import login_required
@@ -533,16 +540,20 @@ def demo(request):
     departure_date = request.POST.get("Departuredate")
     return_date = request.POST.get("Returndate")
     passenger_count = request.POST.get("passengerCount")
+    cabin_class = normalize_cabin(request.POST.get("cabinClassTop"))
 
     kwargs = {
         "originLocationCode": origin,
         "destinationLocationCode": destination,
         "departureDate": departure_date,
         "adults": passenger_count,
+        "travelClass": cabin_class,
     }
 
     tripPurpose = ""
-    if return_date:
+    live_flight_api_enabled = getattr(settings, 'USE_LIVE_FLIGHT_API', True)
+
+    if return_date and live_flight_api_enabled:
         kwargs["returnDate"] = return_date
         kwargs_trip_purpose = {
             "originLocationCode": origin,
@@ -554,28 +565,42 @@ def demo(request):
             trip_purpose_response = amadeus.travel.predictions.trip_purpose.get(
                 **kwargs_trip_purpose).data
             tripPurpose = trip_purpose_response["result"]
-        except ResponseError as error:
-            messages.error(
-                request, error.response.result["errors"][0]["detail"])
-            return render(request, "demo/home.html")
+        except Exception as error:
+            logger.warning(f"Trip purpose lookup unavailable: {error}")
 
     if origin and destination and departure_date:
-        try:
-            search_flights = amadeus.shopping.flight_offers_search.get(
-                **kwargs)
-        except ResponseError as error:
-            messages.error(
-                request, error.response.result["errors"][0]["detail"])
-            return render(request, "demo/home.html")
+        search_flights = None
+        if live_flight_api_enabled:
+            try:
+                search_flights = amadeus.shopping.flight_offers_search.get(
+                    **kwargs)
+            except Exception as error:
+                logger.warning(f"Amadeus flight search unavailable, using local fares: {error}")
 
         search_flights_returned = []
-        response = []
+        raw_flights = list(search_flights.data) if search_flights else []
+        minimum_results = getattr(settings, 'MIN_FLIGHT_RESULTS', 18)
 
-        for flight in search_flights.data:
+        if len(raw_flights) < minimum_results:
+            local_fares = local_flight_search(
+                origin=origin,
+                destination=destination,
+                departure_date=departure_date,
+                return_date=return_date,
+                passenger_count=passenger_count,
+                cabin=cabin_class,
+            )
+            raw_flights.extend(local_fares[:max(minimum_results - len(raw_flights), 0)])
+            if local_fares and not search_flights:
+                messages.info(request, "Showing locally priced fares while live airline pricing is unavailable.")
+            elif local_fares:
+                messages.info(request, "Showing additional local fare options for this route.")
+
+        for flight in raw_flights:
             offer = Flight(flight).construct_flights()
             search_flights_returned.append(offer)
 
-        response = zip(search_flights_returned, search_flights.data)
+        response = zip(search_flights_returned, raw_flights)
         # Check if the response is empty and pass a message to the template
         if not search_flights_returned:
             messages.info(request, "No flight itinerary for this route.")
@@ -697,6 +722,7 @@ def book_flight(request):
 
         # Find approved flights for any user matching the criteria
         approved_flights = Flight_model.objects.filter(
+            user=request.user,
             origin=origin,
             destination=destination,
             departure_date=departure_date,
@@ -709,7 +735,21 @@ def book_flight(request):
 
         if approved_flights:
             for approved_flight in approved_flights:
-                user = approved_flight.user
+                user = request.user
+
+                if flight_data.get('source') in LOCAL_FARE_SOURCES:
+                    passenger_name_record = [
+                        local_booking_confirmation(user, flight_data)
+                    ]
+                    send_flight_email(
+                        user,
+                        origin,
+                        destination,
+                        departure_date,
+                        return_date,
+                        passenger_name_record
+                    )
+                    return render(request, "demo/book_flight.html", {"response": passenger_name_record})
 
                 # Proceed with booking logic using the current user data
                 try:
@@ -816,32 +856,41 @@ def book_flight(request):
 
 def origin_airport_search(request):
     data = []
+    term = request.GET.get("term", None)
     if request.is_ajax():
-        try:
-            data = amadeus.reference_data.locations.get(
-                keyword=request.GET.get("term", None), subType=Location.ANY
-            ).data
-        except (ResponseError, KeyError, AttributeError) as error:
-            messages.add_message(
-                request, messages.ERROR, getattr(error, 'response', {}).get('result', {}).get('errors', [{'detail': str(error)}])[0]["detail"]
-            )
-            data = []
-    return HttpResponse(get_city_airport_list(data), content_type="application/json")
+        if getattr(settings, 'USE_LIVE_FLIGHT_API', True):
+            try:
+                data = amadeus.reference_data.locations.get(
+                    keyword=term, subType=Location.ANY
+                ).data
+            except Exception as error:
+                logger.warning(f"Amadeus origin autocomplete unavailable, using local airports: {error}")
+                data = []
+    result = get_city_airport_search_result(data, term)
+    return HttpResponse(result, content_type="application/json")
 
 
 def destination_airport_search(request):
     data = []
+    term = request.GET.get("term", None)
     if request.is_ajax():
-        try:
-            data = amadeus.reference_data.locations.get(
-                keyword=request.GET.get("term", None), subType=Location.ANY
-            ).data
-        except (ResponseError, KeyError, AttributeError) as error:
-            messages.add_message(
-                request, messages.ERROR, getattr(error, 'response', {}).get('result', {}).get('errors', [{'detail': str(error)}])[0]["detail"]
-            )
-            data = []
-    return HttpResponse(get_city_airport_list(data), content_type="application/json")
+        if getattr(settings, 'USE_LIVE_FLIGHT_API', True):
+            try:
+                data = amadeus.reference_data.locations.get(
+                    keyword=term, subType=Location.ANY
+                ).data
+            except Exception as error:
+                logger.warning(f"Amadeus destination autocomplete unavailable, using local airports: {error}")
+                data = []
+    result = get_city_airport_search_result(data, term)
+    return HttpResponse(result, content_type="application/json")
+
+
+def get_city_airport_search_result(data, term=None):
+    result = get_city_airport_list(data)
+    result.extend(local_airport_search(term))
+    result = list(dict.fromkeys(result))
+    return json.dumps(result)
 
 
 def get_city_airport_list(data):
@@ -849,7 +898,7 @@ def get_city_airport_list(data):
     for i, val in enumerate(data):
         result.append(data[i]["iataCode"] + ", " + data[i]["name"])
     result = list(dict.fromkeys(result))
-    return json.dumps(result)
+    return result
 
 
 # ==========   ADMIN ============== >e
@@ -1263,13 +1312,18 @@ def book_hotel(request, offer_id):
 
 
 def city_search(request):
+    data = []
+    term = request.GET.get('term', None)
     if request.is_ajax():
-        try:
-            data = amadeus.reference_data.locations.get(keyword=request.GET.get('term', None),
-                                                        subType=Location.ANY).data
-        except ResponseError as error:
-            messages.add_message(request, messages.ERROR, error.response.body)
-    return HttpResponse(get_city_list(data), 'application/json')
+        if getattr(settings, 'USE_LIVE_FLIGHT_API', True):
+            try:
+                data = amadeus.reference_data.locations.get(keyword=term,
+                                                            subType=Location.ANY).data
+            except Exception as error:
+                logger.warning(f"Amadeus city autocomplete unavailable, using local airports: {error}")
+                data = []
+    result = get_city_list(data) if data else json.dumps(local_airport_search(term))
+    return HttpResponse(result, 'application/json')
 
 
 

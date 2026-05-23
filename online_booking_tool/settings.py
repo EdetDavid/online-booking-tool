@@ -8,8 +8,11 @@ env = environ.Env(
 )
 
 # Take environment variables from the .env file
-environ.Env.read_env(os.path.join(os.path.dirname(
-    os.path.dirname(os.path.abspath(__file__))), '.env'))
+environ.Env.read_env(
+    os.path.join(os.path.dirname(os.path.dirname(
+        os.path.abspath(__file__))), '.env'),
+    overwrite=True,
+)
 
 # Build paths inside the project like this: os.path.join(BASE_DIR, ...)
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -26,7 +29,9 @@ DEBUG = env('DEBUG')
 ALLOWED_HOSTS = ['*']
 AMADEUS_CLIENT_ID = env('AMADEUS_CLIENT_ID')
 AMADEUS_CLIENT_SECRET = env('AMADEUS_CLIENT_SECRET')
-AMADEUS_HOSTNAME = os.environ.get('AMADEUS_HOSTNAME', 'test')  # Default to 'test'
+AMADEUS_HOSTNAME = os.environ.get(
+    'AMADEUS_HOSTNAME', 'test')  # Default to 'test'
+USE_LIVE_FLIGHT_API = env.bool('USE_LIVE_FLIGHT_API', default=True)
 
 
 # Application definition
@@ -40,18 +45,18 @@ INSTALLED_APPS = [
     'django.contrib.humanize',
     "widget_tweaks",
     'demo',
-    # 'hotel',
+    
 ]
 
 MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
+    'whitenoise.middleware.WhiteNoiseMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
     'django.contrib.auth.middleware.AuthenticationMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
-    'whitenoise.middleware.WhiteNoiseMiddleware',
 ]
 
 ROOT_URLCONF = 'online_booking_tool.urls'
@@ -146,6 +151,7 @@ USE_TZ = True
 STATIC_ROOT = os.path.join(BASE_DIR, 'staticfiles')
 STATIC_TMP = os.path.join(BASE_DIR, 'static')
 STATIC_URL = '/static/'
+STATICFILES_STORAGE = 'whitenoise.storage.CompressedStaticFilesStorage'
 
 os.makedirs(STATIC_TMP, exist_ok=True)
 os.makedirs(STATIC_ROOT, exist_ok=True)

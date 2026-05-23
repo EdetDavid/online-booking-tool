@@ -1,0 +1,192 @@
+/* Shared responsive table behavior for dashboard templates. */
+.content-section .table-container,
+.content-section .table-responsive {
+    max-width: 100%;
+    overflow-x: auto !important;
+    -webkit-overflow-scrolling: touch;
+}
+
+.content-section .table-container {
+    width: 100% !important;
+}
+
+.content-section table {
+    width: 100%;
+}
+
+.content-section .table-responsive table,
+.content-section .table-container table {
+    min-width: 680px;
+}
+
+.content-section td,
+.content-section th {
+    overflow-wrap: anywhere;
+    vertical-align: middle;
+}
+
+.content-section td[data-label="Actions"] form {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+}
+
+.content-section td[colspan] {
+    color: #6b7280;
+    font-weight: 600;
+    text-align: center !important;
+}
+
+@media (max-width: 900px) {
+    .content-section .container {
+        max-width: 100% !important;
+        padding-left: 0 !important;
+        padding-right: 0 !important;
+    }
+
+    .content-section .table-container {
+        padding: 18px !important;
+    }
+
+    .content-section .table-responsive {
+        border-radius: 8px;
+    }
+}
+
+@media (max-width: 720px) {
+    .content-section .table-container,
+    .content-section .table-responsive {
+        overflow: visible !important;
+        width: 100% !important;
+    }
+
+    .content-section .table-responsive table,
+    .content-section .table-container table,
+    .content-section table {
+        border-collapse: separate !important;
+        border-spacing: 0 !important;
+        min-width: 0 !important;
+        width: 100% !important;
+    }
+
+    .content-section table thead {
+        display: none !important;
+    }
+
+    .content-section table tbody,
+    .content-section table tr,
+    .content-section table td {
+        display: block !important;
+        width: 100% !important;
+    }
+
+    .content-section table tbody tr {
+        background: #ffffff !important;
+        border: 1px solid #e5e7eb !important;
+        border-radius: 10px !important;
+        box-shadow: 0 6px 18px rgba(15, 23, 42, 0.08);
+        margin-bottom: 14px !important;
+        overflow: hidden;
+        padding: 4px 0 !important;
+    }
+
+    .content-section table tbody tr:nth-child(even) {
+        background: #ffffff !important;
+    }
+
+    .content-section table td {
+        align-items: flex-start;
+        border: 0 !important;
+        border-bottom: 1px solid #eef2f7 !important;
+        display: flex !important;
+        gap: 14px;
+        justify-content: space-between;
+        min-height: 44px;
+        padding: 12px 14px !important;
+        position: static !important;
+        text-align: right !important;
+        white-space: normal !important;
+    }
+
+    .content-section table td:last-child {
+        border-bottom: 0 !important;
+    }
+
+    .content-section table td::before {
+        color: #334155;
+        content: attr(data-label);
+        flex: 0 0 42%;
+        font-weight: 700;
+        padding: 0 !important;
+        position: static !important;
+        text-align: left;
+        white-space: normal;
+        width: auto !important;
+    }
+
+    .content-section table td[colspan] {
+        display: block !important;
+        text-align: center !important;
+    }
+
+    .content-section table td[colspan]::before {
+        display: none !important;
+    }
+
+    .content-section td[data-label="Actions"],
+    .content-section td[data-label="Select"],
+    .content-section td[data-label="Profile Picture"] {
+        align-items: center;
+    }
+
+    .content-section td[data-label="Actions"] form {
+        justify-content: flex-end;
+        width: 100%;
+    }
+
+    .content-section .profile-image,
+    .content-section .profile-img {
+        height: 48px !important;
+        width: 48px !important;
+    }
+
+    .content-section .btn-approve,
+    .content-section .btn-disapprove,
+    .content-section .btn-back,
+    .content-section .btn-export {
+        max-width: 100%;
+        white-space: normal;
+    }
+}
+
+@media (max-width: 480px) {
+    .content-section .content-card,
+    .content-section .table-container {
+        padding: 14px !important;
+    }
+
+    .content-section table td {
+        display: block !important;
+        text-align: left !important;
+    }
+
+    .content-section table td::before {
+        display: block;
+        margin-bottom: 6px;
+    }
+
+    .content-section td[data-label="Actions"] form {
+        justify-content: flex-start;
+    }
+}
+
+@media print {
+    .content-section .table-responsive,
+    .content-section .table-container {
+        overflow: visible !important;
+    }
+
+    .content-section table {
+        min-width: 0 !important;
+    }
+}

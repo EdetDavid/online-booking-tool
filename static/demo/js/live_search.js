@@ -31,7 +31,7 @@
         if(form.querySelector('[name=Origin]') && form.querySelector('[name=Destination]') && form.querySelector('[name=Departuredate]')){
             e.preventDefault();
             showOverlay();
-            const resultsContainer = document.querySelector('.table-responsive');
+            const resultsContainer = document.querySelector('.results-list') || document.querySelector('.table-responsive');
             if(resultsContainer) fadeOut(resultsContainer);
 
             const formData = new FormData(form);
@@ -45,12 +45,12 @@
                 if(!resp.ok) throw new Error('Network response was not ok');
                 return resp.text();
             }).then(html => {
-                // Replace results area by finding the first .table-responsive in returned HTML
+                // Replace results area by finding the current results container in returned HTML
                 const parser = new DOMParser();
                 const doc = parser.parseFromString(html, 'text/html');
-                const newTable = doc.querySelector('.table-responsive');
+                const newTable = doc.querySelector('.results-list') || doc.querySelector('.table-responsive');
                 const newFiltersCount = doc.querySelector('#resultsCount');
-                const currentTable = document.querySelector('.table-responsive');
+                const currentTable = document.querySelector('.results-list') || document.querySelector('.table-responsive');
                 if(newTable && currentTable){
                     currentTable.parentNode.replaceChild(newTable, currentTable);
                 }
@@ -65,7 +65,7 @@
                 if(window.initResultsFilters) setTimeout(window.initResultsFilters, 50);
             }).catch(err => console.error(err)).finally(()=>{
                 hideOverlay();
-                const resultsContainer = document.querySelector('.table-responsive');
+                const resultsContainer = document.querySelector('.results-list') || document.querySelector('.table-responsive');
                 if(resultsContainer) fadeIn(resultsContainer);
             });
         }

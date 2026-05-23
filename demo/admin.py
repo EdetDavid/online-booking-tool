@@ -8,6 +8,7 @@ from .models import (
     Flight_model,
     PriceIncrement,
     ThriveAdmin,
+    LocalFlightFare,
 )
 
 
@@ -194,6 +195,23 @@ class PriceIncrementAdmin(admin.ModelAdmin):
     search_fields = ("increment_value",)  # Allow searching by increment value
 
 
+class LocalFlightFareAdmin(admin.ModelAdmin):
+    list_display = (
+        "origin",
+        "destination",
+        "airline_code",
+        "cabin",
+        "base_price_naira",
+        "departure_time",
+        "arrival_time",
+        "stop_airport",
+        "seats_available",
+        "active",
+    )
+    list_filter = ("origin", "destination", "cabin", "airline_code", "active")
+    search_fields = ("origin", "destination", "airline_code", "airline_name")
+
+
 # Register models
 admin.site.register(User, UserAdmin)
 admin.site.register(Admin, AdminAdmin)
@@ -202,3 +220,4 @@ admin.site.register(Profile, ProfileAdmin)
 admin.site.register(Flight_model, Flight_modelAdmin)
 admin.site.register(PriceIncrement, PriceIncrementAdmin)
 admin.site.register(ThriveAdmin, ThriveAdminAdmin)
+admin.site.register(LocalFlightFare, LocalFlightFareAdmin)
