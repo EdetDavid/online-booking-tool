@@ -167,6 +167,86 @@ body.results-page {
     overflow: hidden;
 }
 
+.hotel-result-card {
+    align-items: stretch;
+    background: #fff;
+    border: 1px solid #dde6f0;
+    border-radius: 8px;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 210px;
+    overflow: hidden;
+}
+
+.hotel-card-main {
+    display: grid;
+    grid-template-columns: 132px minmax(0, 1fr);
+}
+
+.hotel-icon-column {
+    align-items: center;
+    border-right: 1px solid #edf2f7;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    padding: 18px 14px;
+    text-align: center;
+}
+
+.hotel-icon-column i {
+    align-items: center;
+    background: #e0f2fe;
+    border-radius: 50%;
+    color: #075985;
+    display: flex;
+    font-size: 22px;
+    height: 46px;
+    justify-content: center;
+    width: 46px;
+}
+
+.hotel-icon-column strong {
+    font-size: 16px;
+    margin-top: 8px;
+}
+
+.hotel-icon-column span,
+.hotel-address-line {
+    color: #64748b;
+    font-size: 13px;
+}
+
+.hotel-info-column {
+    padding: 18px;
+    position: relative;
+}
+
+.hotel-info-column h2 {
+    color: #17202a;
+    font-size: 23px;
+    font-weight: 900;
+    letter-spacing: 0;
+    margin: 0 110px 8px 0;
+}
+
+.hotel-address-line {
+    align-items: flex-start;
+    display: flex;
+    gap: 8px;
+    line-height: 1.5;
+    margin-bottom: 12px;
+}
+
+.hotel-address-line i {
+    color: #f97316;
+    margin-top: 3px;
+}
+
+.hotel-amenities span {
+    align-items: center;
+    display: inline-flex;
+    gap: 6px;
+}
+
 .flight-card-main {
     display: grid;
     grid-template-columns: 132px minmax(0, 1fr);
@@ -418,6 +498,8 @@ body.results-page {
 
     .results-summary-bar,
     .flight-result-card,
+    .hotel-result-card,
+    .hotel-card-main,
     .flight-card-main {
         display: block;
     }
@@ -432,6 +514,7 @@ body.results-page {
     }
 
     .airline-column,
+    .hotel-icon-column,
     .fare-column {
         border: 0;
         border-top: 1px solid #edf2f7;
@@ -448,6 +531,23 @@ body.results-page {
     .airline-column strong,
     .airline-column em {
         margin-top: 0;
+    }
+
+    .hotel-icon-column {
+        align-items: center;
+        flex-direction: row;
+        gap: 10px;
+        justify-content: flex-start;
+        text-align: left;
+    }
+
+    .hotel-icon-column strong {
+        margin-top: 0;
+    }
+
+    .hotel-info-column h2 {
+        font-size: 21px;
+        margin-right: 0;
     }
 
     .route-line {

@@ -1,6 +1,6 @@
 function initResultsFilters() {
     const list = document.getElementById('resultsList');
-    const cards = Array.from(document.querySelectorAll('.flight-result-card'));
+    const cards = Array.from(document.querySelectorAll('.flight-result-card, .hotel-result-card'));
     const airlinesContainer = document.getElementById('airlinesContainer');
     const sortSelect = document.getElementById('sortSelect');
     const stopsFilter = document.getElementById('stopsFilter');
@@ -9,6 +9,7 @@ function initResultsFilters() {
     const departureTime = document.getElementById('departureTime');
     const cabinFilter = document.getElementById('filterCabinClass');
     const passengerFilter = document.getElementById('filterPassengers');
+    const hotelSearch = document.getElementById('hotelSearch');
     const applyFilters = document.getElementById('applyFilters');
     const clearFilters = document.getElementById('clearFilters');
     const resultsCount = document.getElementById('resultsCount');
@@ -33,7 +34,9 @@ function initResultsFilters() {
             airlines,
             cabin: (card.dataset.cabin || '').replace('-', '_').toLowerCase(),
             seats: parseInt(card.dataset.seats || '0', 10) || 0,
-            tripType: card.dataset.tripType || 'one-way'
+            tripType: card.dataset.tripType || 'one-way',
+            name: (card.dataset.name || '').toLowerCase(),
+            address: (card.dataset.address || '').toLowerCase()
         };
     });
 
@@ -75,6 +78,10 @@ function initResultsFilters() {
             items.sort((a, b) => a.departure.localeCompare(b.departure));
             return;
         }
+        if (mode === 'name') {
+            items.sort((a, b) => a.name.localeCompare(b.name));
+            return;
+        }
         items.sort((a, b) => {
             const aScore = a.price + (a.stops * 65000) + (a.index * 1200);
             const bScore = b.price + (b.stops * 65000) + (b.index * 1200);
@@ -97,6 +104,7 @@ function initResultsFilters() {
         const depBucket = departureTime ? departureTime.value : 'any';
         const cabin = cabinFilter ? cabinFilter.value : 'any';
         const passengers = passengerFilter ? (parseInt(passengerFilter.value, 10) || 1) : 1;
+        const hotelQuery = hotelSearch ? hotelSearch.value.trim().toLowerCase() : '';
         const checkedAirlines = selectedAirlines();
 
         if (stopsValue !== 'any') {
@@ -112,6 +120,10 @@ function initResultsFilters() {
 
         if (checkedAirlines.length) {
             filtered = filtered.filter(item => checkedAirlines.some(code => item.airlines.includes(code)));
+        }
+
+        if (hotelQuery) {
+            filtered = filtered.filter(item => item.name.includes(hotelQuery) || item.address.includes(hotelQuery));
         }
 
         if (cabin !== 'any') {
@@ -133,6 +145,7 @@ function initResultsFilters() {
         if (departureTime) departureTime.value = 'any';
         if (cabinFilter) cabinFilter.value = 'any';
         if (passengerFilter) passengerFilter.value = '1';
+        if (hotelSearch) hotelSearch.value = '';
         document.querySelectorAll('.airline-checkbox').forEach(input => { input.checked = false; });
         applyFilterAndSort();
     }
@@ -150,7 +163,7 @@ function initResultsFilters() {
     [sortSelect, stopsFilter, departureTime, cabinFilter, passengerFilter].forEach(control => {
         if (control) control.addEventListener('change', applyFilterAndSort);
     });
-    [minPrice, maxPrice].forEach(control => {
+    [minPrice, maxPrice, hotelSearch].forEach(control => {
         if (control) control.addEventListener('input', applyFilterAndSort);
     });
     if (airlinesContainer) {

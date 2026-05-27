@@ -859,17 +859,30 @@
         var today = new Date().toISOString().split('T')[0];
         $('#idCheckindate').attr('min', today);
 
+        function normalizeSuggestions(data) {
+          if (Array.isArray(data)) return data;
+          try {
+            var parsed = JSON.parse(data);
+            return Array.isArray(parsed) ? parsed : [];
+          } catch (error) {
+            return [];
+          }
+        }
+
         function makeSource(url) {
           return function(request, response) {
             var term = request.term.trim();
             if (!term) return response([]);
-            if (acCache[term]) return response(acCache[term]);
+            if (acCache[term]) {
+              return response(acCache[term]);
+            }
             $.ajax({
               url: url,
               data: { term: term },
               success: function(data) {
-                acCache[term] = data;
-                response(data);
+                var suggestions = normalizeSuggestions(data);
+                acCache[term] = suggestions;
+                response(suggestions);
               },
               error: function() {
                 response([]);
@@ -902,7 +915,7 @@
           }
         });
         $('#inputOrigin').on('focus', function() {
-          if ($(this).val().length < 2) {
+          if ($(this).val().length) {
             $(this).autocomplete('search', $(this).val());
           }
         });

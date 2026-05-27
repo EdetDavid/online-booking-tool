@@ -16,12 +16,12 @@ class Hotel:
         offer = {}
         try:
             price = self.hotel['offers'][0]['price']
-            offer['price'] = format_price_naira(
-                price.get('total'),
-                price.get('currency', 'USD'),
-            )
+            price_value = price_value_naira(price.get('total'), price.get('currency', 'USD'))
+            offer['price'] = format_price_naira(price.get('total'), price.get('currency', 'USD'))
+            offer['price_value'] = price_value
             offer['name'] = self.hotel['hotel']['name']
             offer['hotelID'] = self.hotel['hotel']['hotelId']
+            offer['source'] = self.hotel.get('source', 'LIVE_HOTEL_API')
 
             hotel_info = self.hotel['hotel']
             offer['address'] = get_hotel_address(hotel_info)
@@ -58,6 +58,10 @@ def get_hotel_address(hotel_info):
 
 
 def format_price_naira(amount, currency='USD'):
+    return f'{price_value_naira(amount, currency).quantize(Decimal("1")):,}'
+
+
+def price_value_naira(amount, currency='USD'):
     try:
         value = Decimal(str(amount).replace(',', ''))
     except (InvalidOperation, TypeError, AttributeError):
@@ -67,7 +71,7 @@ def format_price_naira(amount, currency='USD'):
         value *= NAIRA_PER_HOTEL_PRICE_UNIT
 
     value += get_hotel_markup()
-    return f'{value.quantize(Decimal("1")):,}'
+    return value
 
 
 def get_hotel_markup():

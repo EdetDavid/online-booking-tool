@@ -521,7 +521,13 @@
                       <small class="text-muted">Search keyword</small>
                       <div class="input-with-outer mt-2">
                         <span class="outer-icon"><i class="fa fa-plane"></i></span>
-                        <input type="text" class="form-control" id="inputOrigin" name="Origin" required placeholder="City or airport code" aria-label="Departure city">
+                        <input type="text"
+                               class="form-control"
+                               id="inputOrigin"
+                               name="Origin"
+                               required
+                               placeholder="City or airport code"
+                               aria-label="Departure city">
                       </div>
                     </div>
                   </div>
@@ -537,7 +543,13 @@
                       <small class="text-muted">Search keyword</small>
                       <div class="input-with-outer mt-2">
                         <span class="outer-icon"><i class="fa fa-map-marker-alt"></i></span>
-                        <input type="text" class="form-control" id="inputDestination" name="Destination" required placeholder="City or airport code" aria-label="Destination city">
+                        <input type="text"
+                               class="form-control"
+                               id="inputDestination"
+                               name="Destination"
+                               required
+                               placeholder="City or airport code"
+                               aria-label="Destination city">
                       </div>
                     </div>
                   </div>
@@ -659,17 +671,31 @@
         // Simple client-side cache for autocomplete results
         var acCache = {};
 
+        function normalizeSuggestions(data) {
+          if (Array.isArray(data)) return data;
+          try {
+            var parsed = JSON.parse(data);
+            return Array.isArray(parsed) ? parsed : [];
+          } catch (error) {
+            return [];
+          }
+        }
+
         function makeSource(url) {
           return function(request, response) {
             var term = request.term.trim();
             if (!term) return response([]);
-            if (acCache[term]) return response(acCache[term]);
+            var cacheKey = url + '::' + term.toLowerCase();
+            if (acCache[cacheKey]) {
+              return response(acCache[cacheKey]);
+            }
             $.ajax({
               url: url,
               data: { term: term },
               success: function(data) {
-                acCache[term] = data;
-                response(data);
+                var suggestions = normalizeSuggestions(data);
+                acCache[cacheKey] = suggestions;
+                response(suggestions);
               },
               error: function() { response([]); }
             });
@@ -678,8 +704,8 @@
   // Autocomplete for Origin - when user selects, normalize to IATA code
         $("#inputOrigin").autocomplete({
           source: makeSource("{% url 'origin_airport_search' %}"),
-          minLength: 2,
-          delay: 250,
+          minLength: 1,
+          delay: 150,
           select: function(event, ui) {
             // ui.item is a string like "LAX, Los Angeles"; extract IATA
             var code = ui.item.value.split(',')[0].trim().toUpperCase();
@@ -688,20 +714,20 @@
           }
         });
   // show suggestions on focus
-  $('#inputOrigin').on('focus', function(){ var val = $(this).val(); if(val.length<2) $(this).autocomplete('search', $(this).val() ); });
+  $('#inputOrigin').on('focus', function(){ var val = $(this).val(); if(val.length) $(this).autocomplete('search', val); });
 
         // Autocomplete for Destination
         $("#inputDestination").autocomplete({
           source: makeSource("{% url 'destination_airport_search' %}"),
-          minLength: 2,
-          delay: 250,
+          minLength: 1,
+          delay: 150,
           select: function(event, ui) {
             var code = ui.item.value.split(',')[0].trim().toUpperCase();
             $(this).val(code);
             return false;
           }
         });
-  $('#inputDestination').on('focus', function(){ var val = $(this).val(); if(val.length<2) $(this).autocomplete('search', $(this).val() ); });
+  $('#inputDestination').on('focus', function(){ var val = $(this).val(); if(val.length) $(this).autocomplete('search', val); });
 
         // Set minimum date for departure to today
         var today = new Date().toISOString().split('T')[0];
