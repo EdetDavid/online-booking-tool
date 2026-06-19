@@ -1,99 +1,91 @@
 {% load static %}
-
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/4.0.0/css/bootstrap.min.css"
-          integrity="sha384-Gn5384xqQ1aoWXA+058RXPxPg6fy4IWvTNh0E263XmFcJlSAwiGgFAW/dAiS6JXm" crossorigin="anonymous">
-    <link rel="stylesheet" type="text/css" href="{% static 'demo/style.css' %}">
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.4/css/all.min.css">
-    <link rel="icon" href="{% static 'images/online_booking_tool.png' %}" type="image/x-icon">
     <meta charset="UTF-8">
-        <title>Online Booking Tool - Hotel Booking</title>
-    <style>
-        .hotel-header {
-            background: linear-gradient(135deg, #1e3c72 0%, #2a5298 100%);
-            color: white;
-            padding: 2rem;
-            margin-bottom: 2rem;
-        }
-        .room-card {
-            transition: transform 0.3s ease;
-            border: none;
-            box-shadow: 0 2px 15px rgba(0,0,0,0.1);
-        }
-        .room-card:hover {
-            transform: translateY(-5px);
-        }
-        .price-tag {
-            font-size: 1.5rem;
-            font-weight: bold;
-            color: #2a5298;
-        }
-        .book-btn {
-            background-color: #f0ad4e;
-            border: none;
-            padding: 0.5rem 2rem;
-            transition: all 0.3s ease;
-        }
-        .book-btn:hover {
-            background-color: #ec971f;
-            transform: scale(1.05);
-        }
-        .date-info {
-            font-size: 1.1rem;
-            color: #6c757d;
-        }
-    </style>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{ name|default:"Hotel rooms" }} | Online Booking Tool</title>
+    <link rel="icon" href="{% static 'images/online_booking_tool.png' %}" type="image/x-icon">
+    <link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/4.0.0/css/bootstrap.min.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.4/css/all.min.css">
+    <link rel="stylesheet" href="{% static 'demo/css/site_public.css' %}">
+    <link rel="stylesheet" href="{% static 'demo/css/cart.css' %}">
+    <link rel="stylesheet" href="{% static 'demo/css/hotel_pages.css' %}">
 </head>
-<body>
+<body class="hotel-page">
+    {% include 'demo/includes/public_nav.html' %}
+    {% include 'demo/includes/toasts.html' %}
 
-<div class="hotel-header text-center">
-    <h2 class="mb-3">{{ name }}</h2>
-    <div class="date-info">
-        <i class="far fa-calendar-alt mr-2"></i>{{ origin }}
-        <br>
-        {{ departureDate }}
-        {% if returnDate %}
-        <span class="mx-2">&#10594&#10596</span>
-        {{ returnDate }}
-        {% endif %}
-    </div>
-</div>
-
-<div class="container">
-    <h3 class="text-center mb-4">Available Rooms</h3>
-    
-    <div class="row justify-content-center">
-        {% for r in response %}
-        <div class="col-md-8 mb-4">
-            <div class="room-card card">
-                <div class="card-header bg-white d-flex justify-content-between align-items-center py-3">
-                    <span class="price-tag">₦{{ r.price }}</span>
-                    <a href="{% url 'book_hotel' r.offerID%}" class="book-btn btn btn-warning">
-                        <i class="fas fa-bookmark mr-2"></i>Book Now
-                    </a>
-                </div>
-                <div class="card-body">
-                    <div class="room-description">
-                        <i class="fas fa-bed mr-2 text-muted"></i>
-                        {{ r.description }}
-                    </div>
-                </div>
+    <header class="hotel-page-hero">
+        <div class="hotel-page-hero-inner">
+            <div class="hotel-page-topline">
+                <a class="hotel-page-back" href="{% url 'hotel' %}#search">← Back to hotel search</a>
+                <a class="cart-shortcut" href="{% url 'cart_detail' %}">
+                    <i class="fas fa-shopping-bag" aria-hidden="true"></i>
+                    Cart <span class="cart-count-badge">{{ cart_count }}</span>
+                </a>
+            </div>
+            <h1>{{ name|default:"Available rooms" }}</h1>
+            <p>Compare the available room options, save one to your cart, or book it now.</p>
+            <div class="stay-facts">
+                <span><i class="far fa-calendar-alt" aria-hidden="true"></i>{{ departureDate }} → {{ returnDate }}</span>
+                <span><i class="fas fa-moon" aria-hidden="true"></i>{{ stay_nights }} night{{ stay_nights|pluralize }}</span>
+                <span><i class="fas fa-user-friends" aria-hidden="true"></i>{{ guest_count }} guest{{ guest_count|pluralize }}</span>
             </div>
         </div>
-        {% endfor %}
-    </div>
-</div>
+    </header>
 
-<script src="https://code.jquery.com/jquery-3.2.1.slim.min.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/popper.js/1.12.9/umd/popper.min.js"></script>
-<script src="https://maxcdn.bootstrapcdn.com/bootstrap/4.0.0/js/bootstrap.min.js"></script>
-<script>
-    $(document).ready(function(){
-        $('[data-toggle="tooltip"]').tooltip();
-    });
-</script>
+    <main class="room-page-shell">
+        <div class="room-summary">
+            <h2>Choose your room</h2>
+            <p>Displayed prices cover the complete stay and include the configured markup.</p>
+        </div>
 
+        <div class="room-results-list">
+            {% for r in response %}
+                <article class="room-result-card">
+                    <div class="room-icon"><i class="fas fa-bed" aria-hidden="true"></i></div>
+                    <div class="room-info">
+                        <h3>{{ r.roomType|default:"Available room" }}</h3>
+                        <p>{{ r.description }}</p>
+                        <div class="room-meta">
+                            <span>{{ r.guests|default:guest_count }} guest{{ r.guests|default:guest_count|pluralize }}</span>
+                            <span>{{ stay_nights }} night{{ stay_nights|pluralize }}</span>
+                            <span>Total stay price</span>
+                        </div>
+                    </div>
+                    <div class="room-price-actions">
+                        <strong>₦{{ r.price }}</strong>
+                        <form method="post" action="{% url 'cart_add_hotel' %}">
+                            {% csrf_token %}
+                            <input type="hidden" name="offer_id" value="{{ r.offerID }}">
+                            <input type="hidden" name="hotel_name" value="{{ name }}">
+                            <input type="hidden" name="description" value="{{ r.description }}">
+                            <input type="hidden" name="check_in" value="{{ r.checkInDate|default:departureDate }}">
+                            <input type="hidden" name="check_out" value="{{ r.checkOutDate|default:returnDate }}">
+                            <input type="hidden" name="guests" value="{{ r.guests|default:guest_count }}">
+                            <input type="hidden" name="price" value="{{ r.price }}">
+                            <input type="hidden" name="next" value="{{ request.get_full_path }}">
+                            <button class="room-cart-button" type="submit"><i class="fas fa-cart-plus mr-1"></i>Add to cart</button>
+                        </form>
+                        <form method="post" action="{% url 'book_hotel' r.offerID %}">
+                            {% csrf_token %}
+                            <button class="room-book-button" type="submit"><i class="fas fa-check mr-1"></i>Book this room</button>
+                        </form>
+                    </div>
+                </article>
+            {% empty %}
+                <section class="hotel-empty-state">
+                    <h2>No rooms available</h2>
+                    <p>Try another property or change your stay dates.</p>
+                </section>
+            {% endfor %}
+        </div>
+    </main>
+
+    <script src="https://code.jquery.com/jquery-3.2.1.slim.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/popper.js/1.12.9/umd/popper.min.js"></script>
+    <script src="https://maxcdn.bootstrapcdn.com/bootstrap/4.0.0/js/bootstrap.min.js"></script>
+    <script src="{% static 'demo/js/responsive_nav.js' %}"></script>
 </body>
 </html>

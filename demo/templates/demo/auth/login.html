@@ -9,6 +9,7 @@
 {% block content %}
     <form class="auth-form" method="post">
         {% csrf_token %}
+        {% if request.GET.next %}<input type="hidden" name="next" value="{{ request.GET.next }}">{% endif %}
         {% include 'demo/auth/form_fields.html' %}
         <button class="auth-submit" type="submit">Sign in as staff</button>
     </form>

@@ -1,0 +1,166 @@
+<section id="search" class="flight-search-section" aria-labelledby="flightSearchHeading">
+    <div class="flight-search-wrap">
+        <div class="flight-search-card">
+            <header class="flight-search-heading">
+                <div>
+                    <p class="flight-search-kicker">Plan business travel</p>
+                    <h2 id="flightSearchHeading">Where are you flying?</h2>
+                    <p>Choose your trip type, add the route, and compare available local and live fares.</p>
+                </div>
+                <span class="search-security-note">
+                    <i class="fas fa-shield-alt" aria-hidden="true"></i>
+                    Approval-ready booking
+                </span>
+            </header>
+
+            <form
+                class="flight-search-body"
+                action="{% url 'home' %}"
+                method="post"
+                id="flightSearchForm"
+                data-authenticated="{% if user.is_authenticated %}true{% else %}false{% endif %}"
+                data-login-url="{% url 'login' %}?next={% url 'home' %}%23search"
+                data-origin-url="{% url 'origin_airport_search' %}"
+                data-destination-url="{% url 'destination_airport_search' %}"
+            >
+                {% csrf_token %}
+
+                <fieldset class="trip-type-tabs" aria-label="Trip type">
+                    <label class="trip-type-option">
+                        <input type="radio" name="tripType" value="one-way" {% if search_values.trip_type == 'one-way' %}checked{% endif %}>
+                        <span><i class="fas fa-long-arrow-alt-right mr-2" aria-hidden="true"></i>One way</span>
+                    </label>
+                    <label class="trip-type-option">
+                        <input type="radio" name="tripType" value="round-trip" {% if search_values.trip_type == 'round-trip' %}checked{% endif %}>
+                        <span><i class="fas fa-exchange-alt mr-2" aria-hidden="true"></i>Round trip</span>
+                    </label>
+                    <label class="trip-type-option">
+                        <input type="radio" name="tripType" value="multi-city" {% if search_values.trip_type == 'multi-city' %}checked{% endif %}>
+                        <span><i class="fas fa-route mr-2" aria-hidden="true"></i>Multi-city</span>
+                    </label>
+                </fieldset>
+
+                <div id="standardTripPanel" class="search-panel">
+                    <div class="route-grid">
+                        <div class="search-control">
+                            <label for="originInput">From <span aria-hidden="true">*</span></label>
+                            <div class="search-input-shell">
+                                <i class="fas fa-plane-departure" aria-hidden="true"></i>
+                                <input class="search-input" type="text" id="originInput" name="Origin" value="{{ search_values.origin }}" placeholder="City or airport code" autocomplete="off" spellcheck="false">
+                            </div>
+                        </div>
+                        <button class="swap-route-button" type="button" id="bookingSwapLocations" aria-label="Swap origin and destination">
+                            <i class="fas fa-exchange-alt" aria-hidden="true"></i>
+                        </button>
+                        <div class="search-control">
+                            <label for="destinationInput">To <span aria-hidden="true">*</span></label>
+                            <div class="search-input-shell">
+                                <i class="fas fa-plane-arrival" aria-hidden="true"></i>
+                                <input class="search-input" type="text" id="destinationInput" name="Destination" value="{{ search_values.destination }}" placeholder="City or airport code" autocomplete="off" spellcheck="false">
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="travel-details-grid">
+                        <div class="search-control">
+                            <label for="departureDate">Departure <span aria-hidden="true">*</span></label>
+                            <input class="search-input" type="date" id="departureDate" name="Departuredate" value="{{ search_values.departure_date }}">
+                        </div>
+                        <div class="search-control return-control" id="returnControl">
+                            <label for="returnDate">Return <span aria-hidden="true">*</span></label>
+                            <input class="search-input" type="date" id="returnDate" name="Returndate" value="{{ search_values.return_date }}">
+                        </div>
+                    </div>
+                </div>
+
+                <div id="multiCityPanel" class="multi-city-panel search-panel" hidden>
+                    <div class="multi-city-intro">
+                        <div>
+                            <h3>Build your itinerary</h3>
+                            <p>Add between two and five flights. Dates must run in chronological order.</p>
+                        </div>
+                        <button class="add-leg-button" id="addMultiCityLeg" type="button">
+                            <i class="fas fa-plus" aria-hidden="true"></i>
+                            <span>Add another flight</span>
+                        </button>
+                    </div>
+
+                    <div id="multiCityLegs">
+                        {% for leg in multi_city_legs %}
+                            <div class="multi-leg">
+                                <div class="multi-leg-number" aria-label="Flight {{ forloop.counter }}">{{ forloop.counter }}</div>
+                                <div class="multi-leg-field multi-leg-origin">
+                                    <label>From <span aria-hidden="true">*</span></label>
+                                    <input class="search-input multi-origin" type="text" name="multi_origin" value="{{ leg.origin }}" placeholder="Airport code" autocomplete="off">
+                                </div>
+                                <div class="multi-leg-field multi-leg-destination">
+                                    <label>To <span aria-hidden="true">*</span></label>
+                                    <input class="search-input multi-destination" type="text" name="multi_destination" value="{{ leg.destination }}" placeholder="Airport code" autocomplete="off">
+                                </div>
+                                <div class="multi-leg-field multi-leg-date">
+                                    <label>Departure <span aria-hidden="true">*</span></label>
+                                    <input class="search-input multi-date" type="date" name="multi_date" value="{{ leg.departure_date }}">
+                                </div>
+                                <button class="remove-leg-button" type="button" aria-label="Remove this flight">
+                                    <i class="fas fa-trash-alt" aria-hidden="true"></i>
+                                </button>
+                            </div>
+                        {% endfor %}
+                    </div>
+                </div>
+
+                <div class="travel-details-grid shared-travel-details">
+                    <div class="search-control">
+                        <label for="bookingPassengerCount">Passengers</label>
+                        <div class="passenger-picker">
+                            <button type="button" id="bookingDecreasePassengers" aria-label="Remove passenger"><i class="fas fa-minus"></i></button>
+                            <input type="number" id="bookingPassengerCount" name="passengerCount" value="{{ search_values.passenger_count|default:1 }}" min="1" max="9" aria-label="Passenger count">
+                            <button type="button" id="bookingIncreasePassengers" aria-label="Add passenger"><i class="fas fa-plus"></i></button>
+                        </div>
+                    </div>
+                    <div class="search-control">
+                        <label for="cabinClassTop">Cabin</label>
+                        <select class="search-input" id="cabinClassTop" name="cabinClassTop">
+                            <option value="economy" {% if search_values.cabin == 'economy' %}selected{% endif %}>Economy</option>
+                            <option value="premium_economy" {% if search_values.cabin == 'premium_economy' %}selected{% endif %}>Premium economy</option>
+                            <option value="business" {% if search_values.cabin == 'business' %}selected{% endif %}>Business</option>
+                            <option value="first" {% if search_values.cabin == 'first' %}selected{% endif %}>First class</option>
+                        </select>
+                    </div>
+                </div>
+
+                <footer class="search-footer">
+                    <div class="trip-summary">
+                        <i class="fas fa-check" aria-hidden="true"></i>
+                        <span id="tripSummaryText">Round trip · 1 passenger</span>
+                    </div>
+                    <button class="flight-search-submit" type="submit" id="flightSearchSubmit">
+                        <i class="fas fa-search" aria-hidden="true"></i>
+                        <span>Search flights</span>
+                    </button>
+                </footer>
+            </form>
+        </div>
+    </div>
+</section>
+
+<template id="multiCityLegTemplate">
+    <div class="multi-leg">
+        <div class="multi-leg-number"></div>
+        <div class="multi-leg-field multi-leg-origin">
+            <label>From <span aria-hidden="true">*</span></label>
+            <input class="search-input multi-origin" type="text" name="multi_origin" placeholder="Airport code" autocomplete="off">
+        </div>
+        <div class="multi-leg-field multi-leg-destination">
+            <label>To <span aria-hidden="true">*</span></label>
+            <input class="search-input multi-destination" type="text" name="multi_destination" placeholder="Airport code" autocomplete="off">
+        </div>
+        <div class="multi-leg-field multi-leg-date">
+            <label>Departure <span aria-hidden="true">*</span></label>
+            <input class="search-input multi-date" type="date" name="multi_date">
+        </div>
+        <button class="remove-leg-button" type="button" aria-label="Remove this flight">
+            <i class="fas fa-trash-alt" aria-hidden="true"></i>
+        </button>
+    </div>
+</template>

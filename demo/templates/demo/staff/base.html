@@ -7,6 +7,7 @@
     <title>{% block title %}Admin Dashboard{% endblock %}</title>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
     <link rel="stylesheet" href="{% static 'demo/css/responsive_tables.css' %}">
+    <link rel="stylesheet" href="{% static 'demo/css/cart.css' %}">
     <link rel="icon" href="{% static 'images/online_booking_tool.png' %}" type="image/x-icon">
     <style>
         * {
@@ -270,6 +271,10 @@
             </a>
             <a class="my-2 text-decoration-none {% if request.resolver_match.url_name == 'approved_flights' %}active{% endif %}" href="{% url 'approved_flights' %}">
                 <i class="fas fa-plane"></i>Approved Flights
+            </a>
+            <a class="my-2 text-decoration-none {% if request.resolver_match.url_name == 'cart_detail' %}active{% endif %}" href="{% url 'cart_detail' %}">
+                <i class="fas fa-shopping-cart"></i>Travel Cart
+                {% if cart_count %}<span class="cart-count-badge ml-2">{{ cart_count }}</span>{% endif %}
             </a>
         </div>
 

@@ -42,14 +42,18 @@
       <p class="card-text">
         {{ booking_message|default:"Your flight has been successfully booked. Please check your email for the booking confirmation." }}
       </p>
-      <a href="{% url 'home' %}" class="btn btn-primary">{{ button_text|default:"Go to Home" }}</a>
+      {% if cart_count %}
+        <a href="{% url 'cart_detail' %}" class="btn btn-primary">Return to cart ({{ cart_count }})</a>
+      {% else %}
+        <a href="{% url 'home' %}" class="btn btn-primary">{{ button_text|default:"Go to Home" }}</a>
+      {% endif %}
     </div>
   </div>
 </div>
 
 <script>
   setTimeout(function() {
-    window.location.href = "{% url 'home' %}";
+    window.location.href = "{% if cart_count %}{% url 'cart_detail' %}{% else %}{% url 'home' %}{% endif %}";
   }, 5000);
 </script>
 

@@ -7,7 +7,11 @@ from .models import LocalFlightFare, PriceIncrement
 
 
 NAIRA_PER_USD = Decimal('1600')
-LOCAL_FARE_SOURCES = {'LOCAL_FARE_DB', 'SYNTHETIC_FARE_DB'}
+LOCAL_FARE_SOURCES = {
+    'LOCAL_FARE_DB',
+    'SYNTHETIC_FARE_DB',
+    'MULTI_CITY_LOCAL_FARE',
+}
 
 STATIC_AIRPORTS = [
     {
@@ -596,6 +600,67 @@ def local_flight_search(origin, destination, departure_date, return_date=None, p
         )
 
     return offers[:LOCAL_RESULTS_TARGET]
+
+
+def local_multi_city_search(legs, passenger_count=1, cabin='ECONOMY', max_offers=LOCAL_RESULTS_TARGET):
+    normalized_legs = [
+        {
+            'origin': normalize_iata(leg.get('origin')),
+            'destination': normalize_iata(leg.get('destination')),
+            'departure_date': str(leg.get('departure_date') or ''),
+        }
+        for leg in legs
+    ]
+    leg_offer_groups = [
+        local_flight_search(
+            origin=leg['origin'],
+            destination=leg['destination'],
+            departure_date=leg['departure_date'],
+            passenger_count=passenger_count,
+            cabin=cabin,
+        )
+        for leg in normalized_legs
+    ]
+
+    if not leg_offer_groups or any(not offers for offers in leg_offer_groups):
+        return []
+
+    combined_offers = []
+    for index in range(max_offers):
+        selected_offers = [
+            offers[(index + (leg_index * 3)) % len(offers)]
+            for leg_index, offers in enumerate(leg_offer_groups)
+        ]
+        total = sum(
+            Decimal(str(offer.get('price', {}).get('total', '0')))
+            for offer in selected_offers
+        )
+        combined_offers.append(
+            {
+                'id': 'MULTI-' + '-'.join(
+                    f"{leg['origin']}{leg['destination']}{leg['departure_date'].replace('-', '')}"
+                    for leg in normalized_legs
+                ) + f'-{index + 1}',
+                'source': 'MULTI_CITY_LOCAL_FARE',
+                'tripType': 'multi-city',
+                'numberOfBookableSeats': min(
+                    int(offer.get('numberOfBookableSeats') or passenger_count)
+                    for offer in selected_offers
+                ),
+                'price': {
+                    'currency': 'USD',
+                    'total': f'{total:.2f}',
+                },
+                'travelerPricings': selected_offers[0].get('travelerPricings', []),
+                'itineraries': [
+                    itinerary
+                    for offer in selected_offers
+                    for itinerary in offer.get('itineraries', [])
+                ],
+            }
+        )
+
+    return combined_offers
 
 
 def find_matching_fares(origin, destination, cabin, passenger_count):

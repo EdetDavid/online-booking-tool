@@ -1,0 +1,136 @@
+{% load static %}
+{% load humanize %}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Your Cart | Online Booking Tool</title>
+    <link rel="icon" href="{% static 'images/online_booking_tool.png' %}" type="image/x-icon">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
+    <link rel="stylesheet" href="{% static 'demo/css/cart.css' %}">
+</head>
+<body class="cart-page">
+    {% include 'demo/includes/toasts.html' %}
+
+    <header class="cart-hero">
+        <div class="cart-hero-inner">
+            <div class="cart-topbar">
+                <a class="cart-brand" href="{% url 'home' %}">
+                    <img src="{% static 'images/online_booking_tool.png' %}" alt="">
+                    <span>Online Booking Tool</span>
+                </a>
+                <a class="cart-back" href="{% url 'home' %}">Continue shopping</a>
+            </div>
+            <div class="cart-hero-copy">
+                <h1>Your travel cart</h1>
+                <p>
+                    Keep flight and hotel options together while you build your trip.
+                    Each item is submitted through its normal approval or booking workflow.
+                </p>
+            </div>
+        </div>
+    </header>
+
+    <main class="cart-layout">
+        {% if cart_items %}
+            <section class="cart-items" aria-label="Cart items">
+                {% for item in cart_items %}
+                    <article class="cart-item cart-item--{{ item.type }}">
+                        <div class="cart-item-icon" aria-hidden="true">
+                            <i class="fas {% if item.type == 'flight' %}fa-plane{% else %}fa-hotel{% endif %}"></i>
+                        </div>
+
+                        <div>
+                            <p class="cart-item-type">{{ item.type }}</p>
+                            {% if item.type == 'flight' %}
+                                <h2>{{ item.summary.origin }} to {{ item.summary.destination }}</h2>
+                                <div class="cart-item-meta">
+                                    <span>{{ item.summary.departure_date }}{% if item.summary.return_date %} – {{ item.summary.return_date }}{% endif %}</span>
+                                    <span>{{ item.summary.departure_time }} – {{ item.summary.arrival_time }}</span>
+                                    <span>{{ item.summary.passengers }} passenger{{ item.summary.passengers|pluralize }}</span>
+                                    <span>{{ item.summary.cabin }}</span>
+                                    <span>{{ item.summary.trip_type }}</span>
+                                    {% if item.summary.legs > 2 %}<span>{{ item.summary.legs }} flights</span>{% endif %}
+                                    <span>{{ item.summary.airlines }}</span>
+                                    <span>{{ item.summary.stops }} stop{{ item.summary.stops|pluralize }}</span>
+                                </div>
+                            {% else %}
+                                <h2>{{ item.summary.hotel_name }}</h2>
+                                <div class="cart-item-meta">
+                                    <span>{{ item.summary.check_in }} – {{ item.summary.check_out }}</span>
+                                    <span>{{ item.summary.guests }} guest{{ item.summary.guests|pluralize }}</span>
+                                </div>
+                                <p class="cart-item-description">{{ item.summary.description }}</p>
+                            {% endif %}
+                        </div>
+
+                        <div class="cart-item-side">
+                            <span class="cart-price">&#8358;{{ item.summary.price }}</span>
+                            <div class="cart-item-actions">
+                                {% if cart_checkout_allowed %}
+                                    {% if item.type == 'flight' %}
+                                        <form method="post" action="{% url 'book_flight' %}">
+                                            {% csrf_token %}
+                                            <input type="hidden" name="cart_item_id" value="{{ item.id }}">
+                                            <button class="cart-primary" type="submit">Submit request</button>
+                                        </form>
+                                    {% else %}
+                                        <form method="post" action="{% url 'book_hotel' item.payload.offer_id %}">
+                                            {% csrf_token %}
+                                            <input type="hidden" name="cart_item_id" value="{{ item.id }}">
+                                            <button class="cart-primary" type="submit">Book stay</button>
+                                        </form>
+                                    {% endif %}
+                                {% elif not user.is_authenticated %}
+                                    <a class="cart-primary" href="{% url 'login' %}?next={% url 'cart_detail' %}">Sign in to continue</a>
+                                {% else %}
+                                    <span class="cart-primary" title="Only staff accounts can submit travel requests">Staff access required</span>
+                                {% endif %}
+                                <form method="post" action="{% url 'cart_remove' item.id %}">
+                                    {% csrf_token %}
+                                    <button class="cart-remove" type="submit" aria-label="Remove this item">Remove</button>
+                                </form>
+                            </div>
+                        </div>
+                    </article>
+                {% endfor %}
+            </section>
+
+            <aside class="cart-summary">
+                <h2>Trip summary</h2>
+                <div class="cart-summary-row">
+                    <span>Items</span>
+                    <strong>{{ cart_items|length }}</strong>
+                </div>
+                <div class="cart-summary-row cart-summary-row--total">
+                    <span>Estimated total</span>
+                    <strong>&#8358;{{ cart_total|floatformat:0|intcomma }}</strong>
+                </div>
+                <p class="cart-summary-note">
+                    Saved totals are estimates. Flights still require the normal
+                    administrator approval before ticketing.
+                </p>
+                <form method="post" action="{% url 'cart_clear' %}">
+                    {% csrf_token %}
+                    <button class="cart-clear" type="submit">Clear cart</button>
+                </form>
+                <div class="cart-shop-links">
+                    <a class="cart-shop-link" href="{% url 'home' %}#search">Add flight</a>
+                    <a class="cart-shop-link" href="{% url 'hotel' %}#search">Add hotel</a>
+                </div>
+            </aside>
+        {% else %}
+            <section class="cart-empty">
+                <div class="cart-empty-icon"><i class="fas fa-shopping-bag" aria-hidden="true"></i></div>
+                <h2>Your cart is empty</h2>
+                <p>Save a flight or hotel room and it will appear here.</p>
+                <div class="cart-empty-actions">
+                    <a class="cart-primary" href="{% url 'home' %}#search">Search flights</a>
+                    <a class="cart-primary" href="{% url 'hotel' %}#search">Search hotels</a>
+                </div>
+            </section>
+        {% endif %}
+    </main>
+</body>
+</html>

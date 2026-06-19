@@ -11,6 +11,7 @@ import csv
 import xlwt
 import logging
 import requests
+from datetime import datetime
 from functools import wraps
 from amadeus import Client, ResponseError, Location
 from django.shortcuts import render, redirect, get_object_or_404
@@ -20,6 +21,15 @@ from django.utils.http import url_has_allowed_host_and_scheme
 from django.views.decorators.cache import never_cache
 from .flight import Flight
 from .booking import Booking
+from .cart import (
+    add_flight as add_flight_to_cart,
+    add_hotel as add_hotel_to_cart,
+    cart_items,
+    cart_total_naira,
+    clear_cart,
+    get_cart_item,
+    remove_item as remove_cart_item,
+)
 from .hotel import Hotel, format_price_naira
 from .room import Room
 from .local_flights import (
@@ -27,7 +37,9 @@ from .local_flights import (
     local_airport_search,
     local_booking_confirmation,
     local_flight_search,
+    local_multi_city_search,
     normalize_cabin,
+    normalize_iata,
 )
 from .local_hotels import (
     LOCAL_HOTEL_RESULTS_TARGET,
@@ -574,6 +586,13 @@ def staff_login(request):
                 auth_login(request, user)
                 # messages.success(request, 'Staff login successful.')
                 # Redirect to staff dashboard
+                next_url = request.POST.get('next')
+                if next_url and url_has_allowed_host_and_scheme(
+                    next_url,
+                    allowed_hosts={request.get_host()},
+                    require_https=request.is_secure(),
+                ):
+                    return redirect(next_url)
                 return redirect('profile')
             except Staff.DoesNotExist:
                 messages.error(
@@ -691,54 +710,115 @@ def update_price_increment(request):
 
 
 def demo(request):
-    user = request.user
-    origin = request.POST.get("Origin")
-    destination = request.POST.get("Destination")
-    departure_date = request.POST.get("Departuredate")
-    return_date = request.POST.get("Returndate")
-    passenger_count = request.POST.get("passengerCount")
+    if request.method != "POST":
+        return render(
+            request,
+            "demo/home.html",
+            flight_search_form_context(request.GET),
+        )
+
+    trip_type = normalize_trip_type(request.POST.get("tripType"))
+    passenger_count = normalize_passenger_count(
+        request.POST.get("passengerCount")
+    )
     cabin_class = normalize_cabin(request.POST.get("cabinClassTop"))
 
-    kwargs = {
-        "originLocationCode": origin,
-        "destinationLocationCode": destination,
-        "departureDate": departure_date,
-        "adults": passenger_count,
-        "travelClass": cabin_class,
-    }
+    if trip_type == "multi-city":
+        legs = posted_multi_city_legs(request)
+        error = validate_multi_city_legs(legs)
+        if error:
+            messages.error(request, error)
+            return render(
+                request,
+                "demo/home.html",
+                flight_search_form_context(request.POST, legs),
+            )
 
-    tripPurpose = ""
-    live_flight_api_enabled = getattr(settings, 'USE_LIVE_FLIGHT_API', True)
+        raw_flights = local_multi_city_search(
+            legs=legs,
+            passenger_count=passenger_count,
+            cabin=cabin_class,
+            max_offers=getattr(settings, "MIN_FLIGHT_RESULTS", 18),
+        )
+        messages.info(
+            request,
+            "Showing multi-city itinerary combinations with locally priced fares.",
+        )
+        origin = legs[0]["origin"]
+        destination = legs[-1]["destination"]
+        departure_date = legs[0]["departure_date"]
+        return_date = legs[-1]["departure_date"]
+        trip_purpose = ""
+        route_title = "Multi-city trip"
+        route_subtitle = " • ".join(
+            f"{leg['origin']} → {leg['destination']}" for leg in legs
+        )
+    else:
+        origin = normalize_iata(request.POST.get("Origin"))
+        destination = normalize_iata(request.POST.get("Destination"))
+        departure_date = request.POST.get("Departuredate")
+        return_date = (
+            request.POST.get("Returndate")
+            if trip_type == "round-trip"
+            else None
+        )
+        error = validate_standard_flight_search(
+            origin,
+            destination,
+            departure_date,
+            return_date,
+            trip_type,
+        )
+        if error:
+            messages.error(request, error)
+            return render(
+                request,
+                "demo/home.html",
+                flight_search_form_context(request.POST),
+            )
 
-    if return_date and live_flight_api_enabled:
-        kwargs["returnDate"] = return_date
-        kwargs_trip_purpose = {
+        kwargs = {
             "originLocationCode": origin,
             "destinationLocationCode": destination,
             "departureDate": departure_date,
-            "returnDate": return_date,
+            "adults": passenger_count,
+            "travelClass": cabin_class,
         }
-        try:
-            trip_purpose_response = amadeus.travel.predictions.trip_purpose.get(
-                **kwargs_trip_purpose).data
-            tripPurpose = trip_purpose_response["result"]
-        except Exception as error:
-            logger.warning(f"Trip purpose lookup unavailable: {error}")
+        if return_date:
+            kwargs["returnDate"] = return_date
 
-    if origin and destination and departure_date:
         search_flights = None
+        trip_purpose = ""
+        live_flight_api_enabled = getattr(
+            settings, "USE_LIVE_FLIGHT_API", True
+        )
         if live_flight_api_enabled:
             try:
                 search_flights = amadeus.shopping.flight_offers_search.get(
-                    **kwargs)
+                    **kwargs
+                )
             except Exception as error:
                 logger.warning(
-                    f"Amadeus flight search unavailable, using local fares: {error}")
+                    "Amadeus flight search unavailable, using local fares: %s",
+                    error,
+                )
 
-        search_flights_returned = []
+        if return_date and live_flight_api_enabled:
+            try:
+                trip_purpose_response = (
+                    amadeus.travel.predictions.trip_purpose.get(
+                        originLocationCode=origin,
+                        destinationLocationCode=destination,
+                        departureDate=departure_date,
+                        returnDate=return_date,
+                    ).data
+                )
+                trip_purpose = trip_purpose_response["result"]
+            except Exception as error:
+                logger.warning("Trip purpose lookup unavailable: %s", error)
+
         raw_flights = list(search_flights.data) if search_flights else []
-        minimum_results = getattr(settings, 'MIN_FLIGHT_RESULTS', 18)
-
+        minimum_results = getattr(settings, "MIN_FLIGHT_RESULTS", 18)
         if len(raw_flights) < minimum_results:
             local_fares = local_flight_search(
                 origin=origin,
@@ -749,38 +829,260 @@ def demo(request):
                 cabin=cabin_class,
             )
             raw_flights.extend(
-                local_fares[:max(minimum_results - len(raw_flights), 0)])
+                local_fares[:max(minimum_results - len(raw_flights), 0)]
+            )
             if local_fares and not search_flights:
                 messages.info(
-                    request, "Showing locally priced fares while live airline pricing is unavailable.")
+                    request,
+                    "Showing locally priced fares while live airline pricing is unavailable.",
+                )
             elif local_fares:
                 messages.info(
-                    request, "Showing additional local fare options for this route.")
+                    request,
+                    "Showing additional local fare options for this route.",
+                )
+        route_title = f"{origin} to {destination}"
+        route_subtitle = ""
 
-        for flight in raw_flights:
-            offer = Flight(flight).construct_flights()
-            search_flights_returned.append(offer)
+    for flight in raw_flights:
+        flight["tripType"] = trip_type
 
-        response = zip(search_flights_returned, raw_flights)
-        # Check if the response is empty and pass a message to the template
-        if not search_flights_returned:
-            messages.info(request, "No flight itinerary for this route.")
-            return redirect('home')
-
+    search_flights_returned = [
+        Flight(flight).construct_flights() for flight in raw_flights
+    ]
+    if not search_flights_returned:
+        messages.info(request, "No flight itinerary was found for this trip.")
         return render(
             request,
-            "demo/results.html",
-            {
-                "response": response,
-                "origin": origin,
-                "destination": destination,
-                "departureDate": departure_date,
-                "returnDate": return_date,
-                "tripPurpose": tripPurpose,
-            },
+            "demo/home.html",
+            flight_search_form_context(
+                request.POST,
+                posted_multi_city_legs(request)
+                if trip_type == "multi-city"
+                else None,
+            ),
         )
 
-    return render(request, "demo/home.html")
+    return render(
+        request,
+        "demo/results.html",
+        {
+            "response": zip(search_flights_returned, raw_flights),
+            "origin": origin,
+            "destination": destination,
+            "departureDate": departure_date,
+            "returnDate": return_date,
+            "tripPurpose": trip_purpose,
+            "trip_type": trip_type,
+            "route_title": route_title,
+            "route_subtitle": route_subtitle,
+        },
+    )
+
+
+def normalize_trip_type(value):
+    trip_type = str(value or "round-trip").strip().lower()
+    return trip_type if trip_type in {"one-way", "round-trip", "multi-city"} else "round-trip"
+
+
+def normalize_passenger_count(value):
+    try:
+        return min(max(int(value or 1), 1), 9)
+    except (TypeError, ValueError):
+        return 1
+
+
+def posted_multi_city_legs(request):
+    origins = request.POST.getlist("multi_origin")
+    destinations = request.POST.getlist("multi_destination")
+    departure_dates = request.POST.getlist("multi_date")
+    return [
+        {
+            "origin": normalize_iata(origin),
+            "destination": normalize_iata(destination),
+            "departure_date": departure_date,
+        }
+        for origin, destination, departure_date in zip(
+            origins,
+            destinations,
+            departure_dates,
+        )
+        if origin or destination or departure_date
+    ][:5]
+
+
+def validate_standard_flight_search(
+    origin,
+    destination,
+    departure_date,
+    return_date,
+    trip_type,
+):
+    if len(origin) != 3 or len(destination) != 3:
+        return "Choose valid origin and destination airports."
+    if origin == destination:
+        return "Origin and destination must be different."
+    if not valid_future_date(departure_date):
+        return "Choose a valid departure date that is not in the past."
+    if trip_type == "round-trip":
+        if not valid_future_date(return_date):
+            return "Choose a valid return date."
+        if return_date < departure_date:
+            return "Return date cannot be before the departure date."
+    return ""
+
+
+def validate_multi_city_legs(legs):
+    if len(legs) < 2:
+        return "Add at least two flights for a multi-city trip."
+    previous_date = None
+    for index, leg in enumerate(legs, start=1):
+        origin = leg["origin"]
+        destination = leg["destination"]
+        departure_date = leg["departure_date"]
+        if len(origin) != 3 or len(destination) != 3:
+            return f"Choose valid airports for flight {index}."
+        if origin == destination:
+            return f"Flight {index} must arrive at a different airport."
+        if not valid_future_date(departure_date):
+            return f"Choose a valid date for flight {index}."
+        if previous_date and departure_date < previous_date:
+            return "Multi-city flight dates must be in chronological order."
+        previous_date = departure_date
+    return ""
+
+
+def valid_future_date(value):
+    try:
+        selected = datetime.strptime(value, "%Y-%m-%d").date()
+    except (TypeError, ValueError):
+        return False
+    return selected >= datetime.now().date()
+
+
+def flight_search_form_context(post_data=None, multi_legs=None):
+    post_data = post_data or {}
+    trip_type = normalize_trip_type(post_data.get("tripType"))
+    legs = multi_legs or [
+        {"origin": "", "destination": "", "departure_date": ""},
+        {"origin": "", "destination": "", "departure_date": ""},
+    ]
+    return {
+        "search_values": {
+            "trip_type": trip_type,
+            "origin": post_data.get("Origin", ""),
+            "destination": post_data.get("Destination", ""),
+            "departure_date": post_data.get("Departuredate", ""),
+            "return_date": post_data.get("Returndate", ""),
+            "passenger_count": normalize_passenger_count(
+                post_data.get("passengerCount")
+            ),
+            "cabin": str(post_data.get("cabinClassTop") or "economy").lower(),
+        },
+        "multi_city_legs": legs,
+    }
+
+
+def cart_detail(request):
+    return render(
+        request,
+        "demo/cart.html",
+        {
+            "cart_items": cart_items(request),
+            "cart_total": cart_total_naira(request),
+        },
+    )
+
+
+def cart_add_flight(request):
+    if request.method != "POST":
+        return redirect("home")
+
+    flight_payload = request.POST.get("flight_data")
+    try:
+        flight_data = decode_flight_payload(flight_payload)
+        added = add_flight_to_cart(request, flight_data)
+        if added:
+            messages.success(request, "Flight added to your cart.")
+        else:
+            messages.info(request, "That flight is already in your cart.")
+    except (TypeError, ValueError, KeyError, IndexError, SyntaxError) as error:
+        logger.warning("Could not add flight to cart: %s", error)
+        messages.error(request, "We could not add that flight to your cart.")
+
+    return redirect_after_cart_action(request, "cart_detail")
+
+
+def cart_add_hotel(request):
+    if request.method != "POST":
+        return redirect("hotel")
+
+    try:
+        added = add_hotel_to_cart(
+            request,
+            {
+                "offer_id": request.POST.get("offer_id"),
+                "hotel_name": request.POST.get("hotel_name"),
+                "description": request.POST.get("description"),
+                "check_in": request.POST.get("check_in"),
+                "check_out": request.POST.get("check_out"),
+                "guests": request.POST.get("guests"),
+                "price": request.POST.get("price"),
+            },
+        )
+        if added:
+            messages.success(request, "Hotel room added to your cart.")
+        else:
+            messages.info(request, "That hotel room is already in your cart.")
+    except (TypeError, ValueError) as error:
+        logger.warning("Could not add hotel to cart: %s", error)
+        messages.error(request, "We could not add that hotel room to your cart.")
+
+    return redirect_after_cart_action(request, "cart_detail")
+
+
+def cart_remove(request, item_id):
+    if request.method == "POST":
+        if remove_cart_item(request, item_id):
+            messages.success(request, "Item removed from your cart.")
+        else:
+            messages.info(request, "That item is no longer in your cart.")
+    return redirect("cart_detail")
+
+
+def cart_clear(request):
+    if request.method == "POST":
+        if clear_cart(request):
+            messages.success(request, "Your cart has been cleared.")
+        else:
+            messages.info(request, "Your cart is already empty.")
+    return redirect("cart_detail")
+
+
+def decode_flight_payload(flight_payload):
+    if not flight_payload:
+        raise ValueError("No flight data was provided.")
+
+    decoded = urllib.parse.unquote_plus(flight_payload)
+    try:
+        flight_data = json.loads(decoded)
+    except (json.JSONDecodeError, TypeError):
+        flight_data = ast.literal_eval(decoded)
+
+    if not isinstance(flight_data, dict):
+        raise ValueError("Flight data must be an object.")
+    return flight_data
+
+
+def redirect_after_cart_action(request, default_url_name):
+    next_url = request.POST.get("next") or request.META.get("HTTP_REFERER")
+    if next_url and url_has_allowed_host_and_scheme(
+        next_url,
+        allowed_hosts={request.get_host()},
+        require_https=request.is_secure(),
+    ):
+        return redirect(next_url)
+    return redirect(default_url_name)
 
 
 def get_access_token():
@@ -815,44 +1117,54 @@ def book_flight(request):
 
     try:
         # Get flight data from POST
+        cart_item_id = request.POST.get('cart_item_id')
         flight = request.POST.get('flight_data')
+        if cart_item_id and not flight:
+            cart_item = get_cart_item(request, cart_item_id)
+            if not cart_item or cart_item.get('type') != 'flight':
+                messages.error(request, "That flight is no longer in your cart.")
+                return redirect('cart_detail')
+            flight_data = cart_item.get('payload')
+        else:
+            flight_data = None
+
         if not flight:
-            messages.error(request, "No flight data provided")
-            return redirect('home')
-
-        # The template posts a URL-encoded string; decode first
-        try:
-            decoded = urllib.parse.unquote_plus(flight)
-        except Exception:
-            decoded = flight
-
-        # Try to parse JSON first, then fall back to ast.literal_eval
-        try:
-            flight_data = json.loads(decoded)
-        except Exception as json_err:
+            if flight_data is None:
+                messages.error(request, "No flight data provided")
+                return redirect('home')
+        else:
             try:
-                flight_data = ast.literal_eval(decoded)
-            except Exception as eval_err:
-                logger.exception(
-                    f"Failed to parse flight data: json_err={json_err}, eval_err={eval_err}")
+                flight_data = decode_flight_payload(flight)
+            except (TypeError, ValueError, KeyError, SyntaxError) as error:
+                logger.warning("Failed to parse flight data: %s", error)
                 messages.error(request, "Invalid flight data format")
                 return redirect('home')
 
         logger.debug(f"Processing flight data: {type(flight_data)}")
 
         # Extract flight details from the flight data
+        trip_type = normalize_trip_type(
+            flight_data.get(
+                "tripType",
+                "round-trip"
+                if len(flight_data.get("itineraries", [])) > 1
+                else "one-way",
+            )
+        )
         origin = flight_data['itineraries'][0]['segments'][0]['departure']['iataCode']
-        destination = flight_data['itineraries'][0]['segments'][-1]['arrival']['iataCode']
+        destination = flight_data['itineraries'][-1]['segments'][-1]['arrival']['iataCode']
         departure_date = flight_data['itineraries'][0]['segments'][0]['departure']['at'].split('T')[
             0]
         return_date = flight_data['itineraries'][-1]['segments'][-1]['arrival']['at'].split(
-            'T')[0] if len(flight_data['itineraries']) > 1 else None
+            'T')[0] if trip_type in {'round-trip', 'multi-city'} and len(flight_data['itineraries']) > 1 else None
         passenger_count = len(flight_data['travelerPricings'])
         travel_class = flight_data['travelerPricings'][0]['fareDetailsBySegment'][0]['cabin']
         price = float(flight_data['price']['total'])
 
-        # Multiply the price by 1600
-        price_in_local_currency = price * 1600
+        # Match the total shown in search results and the cart.
+        increment = PriceIncrement.objects.first()
+        markup = float(increment.increment_value or 0) if increment else 0
+        price_in_local_currency = (price * 1600) + markup
         staff_profile = staff_profile_for_user(request.user)
         organization = staff_profile.organization if staff_profile else None
         travel_agency = organization.travel_agency if organization else None
@@ -939,6 +1251,8 @@ def book_flight(request):
                         travel_class,
                         approved_flight
                     )
+                    if cart_item_id:
+                        remove_cart_item(request, cart_item_id)
                     return render(request, "demo/book_flight.html", {"response": passenger_name_record})
 
                 # Proceed with booking logic using the current user data
@@ -1009,6 +1323,8 @@ def book_flight(request):
                             approved_flight
                         )
 
+                        if cart_item_id:
+                            remove_cart_item(request, cart_item_id)
                         # Render the success page
                         return render(request, "demo/book_flight.html", {"response": passenger_name_record})
 
@@ -1019,6 +1335,8 @@ def book_flight(request):
                         request, f"Flight Booked {user.username}. Please check your mails.")
                     send_flight_email_2(user, origin, destination, departure_date,
                                         return_date, travel_class, approved_flight)
+                    if cart_item_id:
+                        remove_cart_item(request, cart_item_id)
                     return render(request, "demo/success_page.html", {"user": user})
 
         else:
@@ -1037,6 +1355,8 @@ def book_flight(request):
                 price=price_in_local_currency,
                 flight_request=flight_request
             )
+            if cart_item_id:
+                remove_cart_item(request, cart_item_id)
 
     except requests.exceptions.HTTPError as http_err:
         logger.error(f"HTTP error occurred: {http_err}")
@@ -1585,14 +1905,37 @@ def send_flight_pending_email(user, origin, destination, departure_date, return_
 
 
 def hotel(request):
+    if request.method != 'POST':
+        return render(
+            request,
+            'demo/hotel/demo_form.html',
+            hotel_search_form_context(request.GET),
+        )
+
     origin = normalize_city_code(request.POST.get('Origin'))
     checkinDate = request.POST.get('Checkindate')
     checkoutDate = request.POST.get('Checkoutdate')
 
     try:
-        guest_count = max(int(request.POST.get('guestCount', '1') or 1), 1)
+        guest_count = min(
+            max(int(request.POST.get('guestCount', '1') or 1), 1),
+            9,
+        )
     except (TypeError, ValueError):
         guest_count = 1
+
+    validation_error = validate_hotel_search(
+        origin,
+        checkinDate,
+        checkoutDate,
+    )
+    if validation_error:
+        messages.error(request, validation_error)
+        return render(
+            request,
+            'demo/hotel/demo_form.html',
+            hotel_search_form_context(request.POST),
+        )
 
     if origin and checkinDate and checkoutDate:
         # Store guest count in session for later use during booking
@@ -1657,15 +2000,52 @@ def hotel(request):
 
         if not hotel_offers:
             messages.info(request, "No hotels found in this location.")
-            return render(request, 'demo/hotel/demo_form.html', {})
+            return render(
+                request,
+                'demo/hotel/demo_form.html',
+                hotel_search_form_context(request.POST),
+            )
 
         response = zip(hotel_offers, hotel_results)
         return render(request, 'demo/hotel/results.html', {'response': response,
                                                            'origin': hotel_city_label(origin),
                                                            'departureDate': checkinDate,
                                                            'returnDate': checkoutDate,
+                                                           'guest_count': guest_count,
                                                            })
-    return render(request, 'demo/hotel/demo_form.html', {})
+    return render(
+        request,
+        'demo/hotel/demo_form.html',
+        hotel_search_form_context(request.POST),
+    )
+
+
+def validate_hotel_search(origin, checkin_date, checkout_date):
+    if len(str(origin or '')) != 3:
+        return "Choose a valid hotel destination."
+    if not valid_future_date(checkin_date):
+        return "Choose a valid check-in date that is not in the past."
+    if not valid_future_date(checkout_date):
+        return "Choose a valid check-out date."
+    if checkout_date <= checkin_date:
+        return "Check-out must be after check-in."
+    return ""
+
+
+def hotel_search_form_context(values=None):
+    values = values or {}
+    try:
+        guests = min(max(int(values.get('guestCount', 1) or 1), 1), 9)
+    except (TypeError, ValueError):
+        guests = 1
+    return {
+        'hotel_search_values': {
+            'origin': values.get('Origin', ''),
+            'checkin': values.get('Checkindate', ''),
+            'checkout': values.get('Checkoutdate', ''),
+            'guests': guests,
+        }
+    }
 
 
 def rooms_per_hotel(request, hotel, departureDate, returnDate):
@@ -1681,10 +2061,22 @@ def rooms_per_hotel(request, hotel, departureDate, returnDate):
                                                              checkOutDate=returnDate,
                                                              adults=guest_count).data
         hotel_rooms = Room(rooms).construct_room()
+        try:
+            stay_nights = max(
+                (
+                    datetime.strptime(returnDate, '%Y-%m-%d').date()
+                    - datetime.strptime(departureDate, '%Y-%m-%d').date()
+                ).days,
+                1,
+            )
+        except (TypeError, ValueError):
+            stay_nights = 1
         return render(request, 'demo/hotel/rooms_per_hotel.html', {'response': hotel_rooms,
                                                                    'name': rooms[0]['hotel']['name'],
                                                                    'departureDate': departureDate,
                                                                    'returnDate': returnDate,
+                                                                   'guest_count': guest_count,
+                                                                   'stay_nights': stay_nights,
                                                                    })
     except (TypeError, AttributeError, ResponseError, KeyError, IndexError, ValueError) as error:
         messages.add_message(request, messages.ERROR, error)
@@ -1735,11 +2127,42 @@ def hotel_booking_success_context():
     }
 
 
+@staff_required
 def book_hotel(request, offer_id):
+    if request.method != "POST":
+        messages.error(request, "Choose a room before booking.")
+        return redirect("hotel")
+
     try:
-        # Always show the success page after clicking "Book Now".
-        # This bypasses external booking calls and any intermediate pages.
-        return render(request, "demo/success_page.html", hotel_booking_success_context())
+        cart_item_id = request.POST.get("cart_item_id")
+        if cart_item_id:
+            cart_item = get_cart_item(request, cart_item_id)
+            if not cart_item or cart_item.get("type") != "hotel":
+                messages.error(request, "That hotel room is no longer in your cart.")
+                return redirect("cart_detail")
+            stored_offer_id = cart_item.get("payload", {}).get("offer_id")
+            if stored_offer_id != offer_id:
+                messages.error(request, "The hotel offer in your cart has changed.")
+                return redirect("cart_detail")
+
+        if is_local_hotel_offer_id(offer_id):
+            hotel_details = local_hotel_offer(offer_id)
+            booking_details = local_hotel_booking_confirmation(
+                request.user,
+                offer_id,
+            )
+            send_hotel_booking_email(
+                request.user,
+                hotel_details,
+                booking_details,
+            )
+
+        if cart_item_id:
+            remove_cart_item(request, cart_item_id)
+
+        context = hotel_booking_success_context()
+        context["cart_count"] = len(cart_items(request))
+        return render(request, "demo/success_page.html", context)
     except Exception as error:
         messages.add_message(request, messages.ERROR, str(error))
         return render(request, "demo/success_page.html", hotel_booking_success_context())

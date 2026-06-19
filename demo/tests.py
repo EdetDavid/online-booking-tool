@@ -4,12 +4,385 @@ from django.urls import reverse
 from datetime import date
 from unittest.mock import patch
 
+import json
 import requests
 from django.core import mail
 from django.core.mail import EmailMultiAlternatives, send_mail
 from django.test import override_settings
 from . import views
+from .local_flights import local_multi_city_search
 from .models import Admin, Flight_model, Organization, Profile, Staff, TravelAgency
+
+
+class BookingCartTests(TestCase):
+    def setUp(self):
+        self.flight_data = {
+            "id": "CART-FLIGHT-1",
+            "source": "LOCAL_FLIGHT_FARE",
+            "price": {"currency": "USD", "total": "500.00"},
+            "numberOfBookableSeats": 7,
+            "itineraries": [
+                {
+                    "duration": "PT6H",
+                    "segments": [
+                        {
+                            "departure": {
+                                "iataCode": "LOS",
+                                "at": "2026-07-10T09:00:00",
+                            },
+                            "arrival": {
+                                "iataCode": "JFK",
+                                "at": "2026-07-10T15:00:00",
+                            },
+                            "carrierCode": "B6",
+                            "duration": "PT6H",
+                        }
+                    ],
+                }
+            ],
+            "travelerPricings": [
+                {
+                    "fareDetailsBySegment": [
+                        {"segmentId": "1", "cabin": "ECONOMY"}
+                    ]
+                }
+            ],
+        }
+
+    def test_cart_stores_flights_hotels_and_blocks_duplicates(self):
+        flight_response = self.client.post(
+            reverse("cart_add_flight"),
+            {"flight_data": json.dumps(self.flight_data)},
+        )
+        self.assertRedirects(flight_response, reverse("cart_detail"))
+
+        self.client.post(
+            reverse("cart_add_flight"),
+            {"flight_data": json.dumps(self.flight_data)},
+        )
+        hotel_response = self.client.post(
+            reverse("cart_add_hotel"),
+            {
+                "offer_id": "LOCAL-HOTEL-LOS-1-ROOM-1-20260710-20260712-G1",
+                "hotel_name": "Harbour View Hotel",
+                "description": "Executive room",
+                "check_in": "2026-07-10",
+                "check_out": "2026-07-12",
+                "guests": "1",
+                "price": "250,000",
+            },
+        )
+        self.assertRedirects(hotel_response, reverse("cart_detail"))
+
+        items = self.client.session["booking_cart"]["items"]
+        self.assertEqual(len(items), 2)
+        response = self.client.get(reverse("cart_detail"))
+        self.assertContains(response, "LOS to JFK")
+        self.assertContains(response, "Harbour View Hotel")
+        self.assertContains(response, "1,050,000")
+
+    def test_cart_item_can_be_removed_and_cart_cleared(self):
+        self.client.post(
+            reverse("cart_add_flight"),
+            {"flight_data": json.dumps(self.flight_data)},
+        )
+        item_id = self.client.session["booking_cart"]["items"][0]["id"]
+
+        self.client.post(reverse("cart_remove", args=[item_id]))
+        self.assertEqual(self.client.session["booking_cart"]["items"], [])
+
+        self.client.post(
+            reverse("cart_add_flight"),
+            {"flight_data": json.dumps(self.flight_data)},
+        )
+        self.client.post(reverse("cart_clear"))
+        self.assertEqual(self.client.session["booking_cart"]["items"], [])
+
+    @patch("demo.views.send_flight_pending_email")
+    def test_submitting_cart_flight_creates_request_and_removes_item(
+        self,
+        mock_pending_email,
+    ):
+        user = get_user_model().objects.create_user(
+            username="cart_staff",
+            email="cart-staff@example.com",
+            password="password-123",
+        )
+        organization = Organization.objects.create(
+            name="Cart Organization",
+            join_code="CARTORG",
+        )
+        Staff.objects.create(
+            staff=user,
+            organization=organization,
+            first_name="Cart",
+            last_name="Staff",
+        )
+        Profile.objects.create(user=user)
+
+        self.client.post(
+            reverse("cart_add_flight"),
+            {"flight_data": json.dumps(self.flight_data)},
+        )
+        item_id = self.client.session["booking_cart"]["items"][0]["id"]
+        self.client.force_login(user)
+
+        response = self.client.post(
+            reverse("book_flight"),
+            {"cart_item_id": item_id},
+        )
+
+        self.assertRedirects(response, reverse("home"))
+        self.assertTrue(
+            Flight_model.objects.filter(
+                user=user,
+                origin="LOS",
+                destination="JFK",
+                approved=False,
+            ).exists()
+        )
+        self.assertEqual(self.client.session["booking_cart"]["items"], [])
+        mock_pending_email.assert_called_once()
+
+
+@override_settings(USE_LIVE_FLIGHT_API=False)
+class FlightSearchTripTypeTests(TestCase):
+    def setUp(self):
+        self.user = get_user_model().objects.create_user(
+            username="search_staff",
+            email="search-staff@example.com",
+            password="password-123",
+        )
+        self.organization = Organization.objects.create(
+            name="Search Organization",
+            join_code="SEARCHORG",
+        )
+        Staff.objects.create(
+            staff=self.user,
+            organization=self.organization,
+            first_name="Search",
+            last_name="Staff",
+        )
+        Profile.objects.create(user=self.user)
+        self.client.force_login(self.user)
+
+    def test_one_way_search_returns_single_leg_itineraries(self):
+        response = self.client.post(
+            reverse("home"),
+            {
+                "tripType": "one-way",
+                "Origin": "LOS",
+                "Destination": "JFK",
+                "Departuredate": "2026-07-10",
+                "Returndate": "2026-07-18",
+                "passengerCount": "1",
+                "cabinClassTop": "economy",
+            },
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'data-trip-type="one-way"', count=18)
+        self.assertNotContains(response, '<div class="leg-label">Return</div>')
+
+    def test_round_trip_search_returns_outbound_and_return_legs(self):
+        response = self.client.post(
+            reverse("home"),
+            {
+                "tripType": "round-trip",
+                "Origin": "LOS",
+                "Destination": "JFK",
+                "Departuredate": "2026-07-10",
+                "Returndate": "2026-07-18",
+                "passengerCount": "2",
+                "cabinClassTop": "business",
+            },
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'data-trip-type="round-trip"', count=18)
+        self.assertContains(response, '<div class="leg-label">Return</div>')
+
+    def test_multi_city_search_returns_every_requested_leg(self):
+        response = self.client.post(
+            reverse("home"),
+            {
+                "tripType": "multi-city",
+                "multi_origin": ["LOS", "ACC", "LHR"],
+                "multi_destination": ["ACC", "LHR", "JFK"],
+                "multi_date": ["2026-07-10", "2026-07-14", "2026-07-20"],
+                "passengerCount": "1",
+                "cabinClassTop": "economy",
+            },
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Multi-city trip")
+        self.assertContains(response, '<div class="leg-label">Flight 3</div>')
+        self.assertContains(response, 'data-trip-type="multi-city"', count=18)
+
+    def test_multi_city_rejects_dates_out_of_order(self):
+        response = self.client.post(
+            reverse("home"),
+            {
+                "tripType": "multi-city",
+                "multi_origin": ["LOS", "ACC"],
+                "multi_destination": ["ACC", "LHR"],
+                "multi_date": ["2026-07-20", "2026-07-14"],
+                "passengerCount": "1",
+                "cabinClassTop": "economy",
+            },
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(
+            response,
+            "flight dates must be in chronological order.",
+        )
+        self.assertNotContains(response, "flight-result-card")
+
+    @patch("demo.views.send_flight_pending_email")
+    def test_multi_city_booking_uses_final_destination_and_trip_end_date(
+        self,
+        mock_pending_email,
+    ):
+        offer = local_multi_city_search(
+            [
+                {
+                    "origin": "LOS",
+                    "destination": "ACC",
+                    "departure_date": "2026-07-10",
+                },
+                {
+                    "origin": "ACC",
+                    "destination": "LHR",
+                    "departure_date": "2026-07-14",
+                },
+                {
+                    "origin": "LHR",
+                    "destination": "JFK",
+                    "departure_date": "2026-07-20",
+                },
+            ],
+            passenger_count=1,
+            cabin="ECONOMY",
+            max_offers=1,
+        )[0]
+
+        response = self.client.post(
+            reverse("book_flight"),
+            {"flight_data": json.dumps(offer)},
+        )
+
+        self.assertRedirects(response, reverse("home"))
+        request = Flight_model.objects.get(user=self.user)
+        self.assertEqual(request.origin, "LOS")
+        self.assertEqual(request.destination, "JFK")
+        self.assertEqual(request.return_date.isoformat(), "2026-07-20")
+        mock_pending_email.assert_called_once()
+
+
+@override_settings(USE_LIVE_HOTEL_API=False)
+class HotelJourneyTests(TestCase):
+    def setUp(self):
+        self.user = get_user_model().objects.create_user(
+            username="hotel_staff",
+            email="hotel-staff@example.com",
+            password="password-123",
+        )
+        self.organization = Organization.objects.create(
+            name="Hotel Organization",
+            join_code="HOTELORG",
+        )
+        Staff.objects.create(
+            staff=self.user,
+            organization=self.organization,
+            first_name="Hotel",
+            last_name="Staff",
+        )
+        Profile.objects.create(user=self.user)
+
+    def test_hotel_search_validates_checkout_after_checkin(self):
+        response = self.client.post(
+            reverse("hotel"),
+            {
+                "Origin": "LOS",
+                "Checkindate": "2026-07-12",
+                "Checkoutdate": "2026-07-10",
+                "guestCount": "1",
+            },
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Check-out must be after check-in.")
+        self.assertNotContains(response, "stay-result-card")
+
+    def test_hotel_search_returns_results_and_preserves_guest_count(self):
+        response = self.client.post(
+            reverse("hotel"),
+            {
+                "Origin": "LOS",
+                "Checkindate": "2026-07-10",
+                "Checkoutdate": "2026-07-12",
+                "guestCount": "2",
+            },
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "stay-result-card", count=12)
+        self.assertContains(response, "2 guests")
+        self.assertEqual(self.client.session["guest_count"], 2)
+
+    def test_local_room_page_shows_room_choices_and_total_stay_facts(self):
+        session = self.client.session
+        session["guest_count"] = 2
+        session.save()
+
+        response = self.client.get(
+            reverse(
+                "rooms_per_hotel",
+                args=["LOCAL-HOTEL-LOS-1", "2026-07-10", "2026-07-12"],
+            )
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "room-result-card", count=3)
+        self.assertContains(response, "2 nights")
+        self.assertContains(response, "2 guests")
+
+    @patch("demo.views.send_hotel_booking_email")
+    def test_local_room_booking_generates_confirmation_email(
+        self,
+        mock_send_email,
+    ):
+        self.client.force_login(self.user)
+        offer_id = "LOCAL-HOTEL-LOS-1-ROOM-1-20260710-20260712-G1"
+
+        response = self.client.post(
+            reverse("book_hotel", args=[offer_id]),
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Hotel Booking Successful")
+        mock_send_email.assert_called_once()
+        hotel_details, booking_details = mock_send_email.call_args.args[1:]
+        self.assertEqual(hotel_details["offers"][0]["id"], offer_id)
+        self.assertTrue(booking_details[0]["providerConfirmationId"])
+
+    def test_hotel_booking_requires_staff_login(self):
+        response = self.client.post(
+            reverse(
+                "book_hotel",
+                args=["LOCAL-HOTEL-LOS-1-ROOM-1-20260710-20260712-G1"],
+            )
+        )
+
+        self.assertRedirects(
+            response,
+            reverse("login") + "?next=" + reverse(
+                "book_hotel",
+                args=["LOCAL-HOTEL-LOS-1-ROOM-1-20260710-20260712-G1"],
+            ),
+        )
 
 
 class TravelAgencyLoginTests(TestCase):

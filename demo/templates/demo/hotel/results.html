@@ -1,165 +1,129 @@
 {% load static %}
-{% load humanize %}
 <!DOCTYPE html>
 <html lang="en">
-    <head>
-        <meta charset="UTF-8">
-        <meta name="viewport" content="width=device-width, initial-scale=1.0">
-        <title>Hotel Results</title>
-        <link rel="icon" href="{% static 'images/online_booking_tool.png' %}">
-        <link rel="stylesheet"
-              href="https://maxcdn.bootstrapcdn.com/bootstrap/4.0.0/css/bootstrap.min.css"
-              integrity="sha384-Gn5384xqQ1aoWXA+058RXPxPg6fy4IWvTNh0E263XmFcJlSAwiGgFAW/dAiS6JXm"
-              crossorigin="anonymous">
-        <link rel="stylesheet"
-              href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.4/css/all.min.css">
-        <link rel="stylesheet" type="text/css" href="{% static 'demo/style.css' %}">
-        <link rel="stylesheet" type="text/css" href="{% static 'demo/css/results_filters.css' %}">
-    </head>
-    <body class="results-page">
-        <div id="toast-container" aria-live="polite" aria-atomic="true"></div>
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Stays in {{ origin }} | Online Booking Tool</title>
+    <link rel="icon" href="{% static 'images/online_booking_tool.png' %}" type="image/x-icon">
+    <link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/4.0.0/css/bootstrap.min.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.4/css/all.min.css">
+    <link rel="stylesheet" href="{% static 'demo/css/site_public.css' %}">
+    <link rel="stylesheet" href="{% static 'demo/css/cart.css' %}">
+    <link rel="stylesheet" href="{% static 'demo/css/hotel_pages.css' %}">
+</head>
+<body class="hotel-page">
+    {% include 'demo/includes/public_nav.html' %}
+    {% include 'demo/includes/toasts.html' %}
 
-        <header class="results-hero">
-            <div class="container">
-                <div class="d-flex justify-content-between align-items-center flex-wrap">
-                    <a href="{% url 'hotel' %}#search" class="back-link">Modify search</a>
-                    <span class="trip-purpose">Hotel stay</span>
-                </div>
-                <div class="route-heading">
-                    <h1>Hotels in {{ origin }}</h1>
-                    <p>
-                        Check-in {{ departureDate }}
-                        {% if returnDate %}<span>&harr;</span> Check-out {{ returnDate }}{% endif %}
-                    </p>
+    <header class="hotel-page-hero">
+        <div class="hotel-page-hero-inner">
+            <div class="hotel-page-topline">
+                <a class="hotel-page-back" href="{% url 'hotel' %}#search">← Modify search</a>
+                <a class="cart-shortcut" href="{% url 'cart_detail' %}">
+                    <i class="fas fa-shopping-bag" aria-hidden="true"></i>
+                    Cart <span class="cart-count-badge">{{ cart_count }}</span>
+                </a>
+            </div>
+            <h1>Stays in {{ origin }}</h1>
+            <p>Compare available hotels and open a property to choose the room that fits your trip.</p>
+            <div class="stay-facts">
+                <span><i class="far fa-calendar-alt" aria-hidden="true"></i>{{ departureDate }} → {{ returnDate }}</span>
+                <span><i class="fas fa-user-friends" aria-hidden="true"></i>{{ guest_count }} guest{{ guest_count|pluralize }}</span>
+                <span><i class="fas fa-tags" aria-hidden="true"></i>Markup included</span>
+            </div>
+        </div>
+    </header>
+
+    <main class="hotel-page-shell">
+        <aside class="hotel-filter-panel">
+            <div class="hotel-filter-heading">
+                <h2>Refine stays</h2>
+                <button id="clearFilters" type="button">Clear</button>
+            </div>
+            <div class="hotel-filter-group">
+                <label for="sortSelect">Sort by</label>
+                <select id="sortSelect">
+                    <option value="best">Recommended</option>
+                    <option value="cheapest">Lowest price</option>
+                    <option value="name">Hotel name</option>
+                </select>
+            </div>
+            <div class="hotel-filter-group">
+                <label for="hotelSearch">Hotel or address</label>
+                <input id="hotelSearch" type="search" placeholder="Search stays">
+            </div>
+            <div class="hotel-filter-group">
+                <label>Estimated total (NGN)</label>
+                <div class="hotel-filter-prices">
+                    <input id="minPrice" type="number" placeholder="Min">
+                    <input id="maxPrice" type="number" placeholder="Max">
                 </div>
             </div>
-        </header>
+            <button id="applyFilters" class="hotel-apply-filters" type="button">Apply filters</button>
+        </aside>
 
-        <main class="container results-shell">
-            <div class="row">
-                <aside class="col-lg-3 mb-4">
-                    <div class="filters-panel">
-                        <div class="filters-heading">
-                            <h2>Filters</h2>
-                            <button id="clearFilters" class="btn btn-link p-0">Clear</button>
-                        </div>
+        <section class="hotel-results-column">
+            <div class="hotel-summary-bar">
+                <div>
+                    <strong><span id="resultsCount">-</span> stays available</strong>
+                    <span>Local and live inventory for your selected dates</span>
+                </div>
+                <span class="hotel-summary-pill">Total stay pricing</span>
+            </div>
 
-                        <div class="filter-section">
-                            <label for="sortSelect">Sort</label>
-                            <select id="sortSelect" class="form-control">
-                                <option value="best">Best</option>
-                                <option value="cheapest">Lowest price</option>
-                                <option value="name">Hotel name</option>
-                            </select>
-                        </div>
+            <div id="emptyResults" class="hotel-empty-state d-none">
+                <h2>No matching stays</h2>
+                <p>Clear your filters or widen the price range.</p>
+            </div>
 
-                        <div class="filter-section">
-                            <label for="hotelSearch">Hotel or address</label>
-                            <input id="hotelSearch" type="search" class="form-control" placeholder="Search hotels">
-                        </div>
-
-                        <div class="filter-section">
-                            <label>Price (NGN)</label>
-                            <div class="d-flex">
-                                <input id="minPrice" type="number" class="form-control mr-2" placeholder="Min">
-                                <input id="maxPrice" type="number" class="form-control" placeholder="Max">
+            <div id="resultsList" class="stay-results-list">
+                {% for r, hotel in response %}
+                    <article
+                        class="stay-result-card hotel-result-card"
+                        data-index="{{ forloop.counter0 }}"
+                        data-price="{{ r.price_value|floatformat:2 }}"
+                        data-name="{{ r.name|default:'' }}"
+                        data-address="{{ r.address|default:'' }}"
+                    >
+                        <div class="stay-visual">
+                            <div class="stay-visual-inner">
+                                <i class="fas fa-hotel" aria-hidden="true"></i>
+                                <strong>Stay</strong>
+                                <span>{% if r.source == 'LIVE_HOTEL_API' %}Live inventory{% else %}Local inventory{% endif %}</span>
                             </div>
                         </div>
-
-                        <button id="applyFilters" class="btn apply-filters btn-block">Apply filters</button>
-                    </div>
-                </aside>
-
-                <section class="col-lg-9">
-                    <div class="results-summary-bar">
-                        <div>
-                            <strong><span id="resultsCount">-</span> hotels found</strong>
-                            <span class="summary-muted">Available stay options for your search</span>
+                        <div class="stay-info">
+                            {% if forloop.first %}<span class="stay-result-badge">Recommended</span>{% endif %}
+                            <h2>{{ r.name }}</h2>
+                            <p class="stay-address">
+                                <i class="fas fa-map-marker-alt" aria-hidden="true"></i>
+                                <span>{{ r.address|default:"Address unavailable" }}</span>
+                            </p>
+                            <div class="stay-amenities">
+                                <span><i class="fas fa-wifi" aria-hidden="true"></i>WiFi</span>
+                                <span><i class="fas fa-briefcase" aria-hidden="true"></i>Business ready</span>
+                                <span><i class="fas fa-concierge-bell" aria-hidden="true"></i>Guest service</span>
+                            </div>
                         </div>
-                        <span class="summary-pill">Prices include markup</span>
-                    </div>
-
-                    <div id="emptyResults" class="empty-results d-none">
-                        <h2>No matching hotels</h2>
-                        <p>Try clearing filters or widening your price range.</p>
-                    </div>
-
-                    <div id="resultsList" class="results-list">
-                        {% for r, hotel in response %}
-                            <article class="hotel-result-card"
-                                     data-index="{{ forloop.counter0 }}"
-                                     data-price="{{ r.price_value|floatformat:2 }}"
-                                     data-name="{{ r.name|default:'' }}"
-                                     data-address="{{ r.address|default:'' }}">
-                                <div class="hotel-card-main">
-                                    <div class="hotel-icon-column">
-                                        <i class="fas fa-hotel" aria-hidden="true"></i>
-                                        <strong>Stay</strong>
-                                        {% if r.source == 'LIVE_HOTEL_API' %}
-                                            <span>Live hotel</span>
-                                        {% else %}
-                                            <span>Local hotel</span>
-                                        {% endif %}
-                                    </div>
-
-                                    <div class="hotel-info-column">
-                                        {% if forloop.first %}
-                                            <span class="result-badge">Recommended</span>
-                                        {% endif %}
-                                        <h2>{{ r.name }}</h2>
-                                        <p class="hotel-address-line">
-                                            <i class="fas fa-map-marker-alt" aria-hidden="true"></i>
-                                            <span>{{ r.address|default:"Address unavailable" }}</span>
-                                        </p>
-                                        <div class="segment-list hotel-amenities">
-                                            <span><i class="fas fa-wifi" aria-hidden="true"></i> Free WiFi</span>
-                                            <span><i class="fas fa-parking" aria-hidden="true"></i> Parking</span>
-                                            <span><i class="fas fa-swimming-pool" aria-hidden="true"></i> Pool</span>
-                                        </div>
-                                    </div>
-                                </div>
-
-                                <div class="fare-column">
-                                    <span class="fare-label">Starting from</span>
-                                    <strong class="price">&#8358;{{ r.price }}</strong>
-                                    <span class="fare-meta">Per available stay</span>
-                                    <a href="{% url 'rooms_per_hotel' r.hotelID departureDate returnDate %}"
-                                       class="book-button btn btn-block">Show Rooms</a>
-                                </div>
-                            </article>
-                        {% endfor %}
-                    </div>
-                </section>
-            </div>
-        </main>
-
-        <script>
-            function showToast(message, type, timeout) {
-                var container = document.getElementById('toast-container');
-                if (!container) return;
-                var card = document.createElement('div');
-                card.className = 'toast-card toast-' + (type || 'info');
-                card.setAttribute('role', 'status');
-                card.innerHTML = '<button type="button" class="toast-close" aria-label="Close">&times;</button><div>' + message + '</div>';
-                card.querySelector('.toast-close').onclick = function () { card.remove(); };
-                container.appendChild(card);
-                setTimeout(function () { if (card.parentNode) card.remove(); }, timeout || 4000);
-            }
-            {% if messages %}
-                {% for message in messages %}
-                    showToast("{{ message|escapejs }}", "{{ message.tags|default:'info' }}");
+                        <div class="stay-price-panel">
+                            <small>Starting total</small>
+                            <strong class="stay-price">₦{{ r.price }}</strong>
+                            <small>For your selected dates</small>
+                            <a class="stay-room-button" href="{% url 'rooms_per_hotel' r.hotelID departureDate returnDate %}">
+                                View rooms
+                            </a>
+                        </div>
+                    </article>
                 {% endfor %}
-            {% endif %}
-        </script>
-        <script src="https://code.jquery.com/jquery-3.2.1.slim.min.js"
-                integrity="sha384-KJ3o2DKtIkvYIK3UENzmM7KCkRr/rE9/Qpg6aAZGJwFDMVNA/GpGFF93hXpG5KkN"
-                crossorigin="anonymous"></script>
-        <script src="https://cdnjs.cloudflare.com/ajax/libs/popper.js/1.12.9/umd/popper.min.js"
-                integrity="sha384-ApNbgh9B+Y1QKtv3Rn7W3mgPxhU9K/ScQsAP7hUibX39j7fakFPskvXusvfa0b4Q"
-                crossorigin="anonymous"></script>
-        <script src="https://maxcdn.bootstrapcdn.com/bootstrap/4.0.0/js/bootstrap.min.js"
-                integrity="sha384-JZR6Spejh4U02d8jOt6vLEHfe/JQGiRRSQQxSfFWpi1MquVdAyjUar5+76PVCmYl"
-                crossorigin="anonymous"></script>
-        <script src="{% static 'demo/js/results_filters.js' %}"></script>
-    </body>
+            </div>
+        </section>
+    </main>
+
+    <script src="https://code.jquery.com/jquery-3.2.1.slim.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/popper.js/1.12.9/umd/popper.min.js"></script>
+    <script src="https://maxcdn.bootstrapcdn.com/bootstrap/4.0.0/js/bootstrap.min.js"></script>
+    <script src="{% static 'demo/js/results_filters.js' %}"></script>
+    <script src="{% static 'demo/js/responsive_nav.js' %}"></script>
+</body>
 </html>

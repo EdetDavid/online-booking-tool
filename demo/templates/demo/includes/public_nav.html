@@ -1,0 +1,74 @@
+{% load static %}
+{% load user_type_urls %}
+<nav class="site-nav navbar navbar-expand-lg fixed-top" aria-label="Main navigation">
+    <a class="site-brand navbar-brand" href="{% url 'home' %}">
+        <img src="{% static 'images/online_booking_tool.png' %}" alt="">
+        <span>Online Booking Tool</span>
+    </a>
+
+    <button
+        class="navbar-toggler"
+        type="button"
+        data-toggle="collapse"
+        data-target="#publicNavbar"
+        aria-controls="publicNavbar"
+        aria-expanded="false"
+        aria-label="Toggle navigation"
+    >
+        <i class="fas fa-bars" aria-hidden="true"></i>
+    </button>
+
+    <div class="collapse navbar-collapse" id="publicNavbar">
+        <ul class="site-services navbar-nav mx-auto">
+            <li class="nav-item">
+                <a class="nav-link {% if request.resolver_match.url_name == 'home' %}active{% endif %}" href="{% url 'home' %}">
+                    <i class="fas fa-plane" aria-hidden="true"></i><span>Flights</span>
+                </a>
+            </li>
+            <li class="nav-item">
+                <a class="nav-link {% if request.resolver_match.url_name == 'hotel' or request.resolver_match.url_name == 'rooms_per_hotel' %}active{% endif %}" href="{% url 'hotel' %}">
+                    <i class="fas fa-hotel" aria-hidden="true"></i><span>Stays</span>
+                </a>
+            </li>
+            <li class="nav-item">
+                <a class="nav-link" href="{% url 'coming_soon' %}">
+                    <i class="fas fa-car" aria-hidden="true"></i><span>Rides</span>
+                </a>
+            </li>
+            <li class="nav-item">
+                <a class="nav-link" href="{% url 'coming_soon' %}">
+                    <i class="fas fa-umbrella-beach" aria-hidden="true"></i><span>Holidays</span>
+                </a>
+            </li>
+        </ul>
+
+        <div class="site-account">
+            <a class="site-cart-link" href="{% url 'cart_detail' %}" aria-label="Open cart with {{ cart_count }} items">
+                <i class="fas fa-shopping-bag" aria-hidden="true"></i>
+                <span>Cart</span>
+                <span class="cart-count-badge">{{ cart_count }}</span>
+            </a>
+            {% if user.is_authenticated %}
+                <div class="dropdown">
+                    <button
+                        class="site-user-button dropdown-toggle"
+                        type="button"
+                        id="siteUserMenu"
+                        data-toggle="dropdown"
+                        aria-haspopup="true"
+                        aria-expanded="false"
+                    >
+                        <span class="site-user-avatar">{{ user.username|first|upper }}</span>
+                        <span>{{ user.username }}</span>
+                    </button>
+                    <div class="dropdown-menu dropdown-menu-right" aria-labelledby="siteUserMenu">
+                        <a class="dropdown-item" href="{% get_profile_url user %}">Dashboard</a>
+                        <a class="dropdown-item" href="{% url 'logout' %}">Sign out</a>
+                    </div>
+                </div>
+            {% else %}
+                <a class="site-login-link" href="{% url 'login' %}">Sign in</a>
+            {% endif %}
+        </div>
+    </div>
+</nav>

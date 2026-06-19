@@ -18,7 +18,14 @@ class Room:
                 room_info = room.get('room', {})
                 description = room_info.get('description', {}).get('text')
                 offer['description'] = description or room_info.get('type', 'Hotel room')
+                offer['roomType'] = (
+                    room_info.get('description', {}).get('text', '').split('.', 1)[0]
+                    or room_info.get('type', 'Hotel room')
+                )
                 offer['offerID'] = room['id']
+                offer['checkInDate'] = room.get('checkInDate', '')
+                offer['checkOutDate'] = room.get('checkOutDate', '')
+                offer['guests'] = room.get('guests', {}).get('adults', 1)
                 hotel_rooms.append(offer)
         except (TypeError, AttributeError, KeyError, IndexError):
             pass

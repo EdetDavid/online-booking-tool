@@ -13,6 +13,7 @@
               crossorigin="anonymous">
         <link rel="stylesheet" type="text/css" href="{% static 'demo/style.css' %}">
         <link rel="stylesheet" type="text/css" href="{% static 'demo/css/results_filters.css' %}">
+        <link rel="stylesheet" type="text/css" href="{% static 'demo/css/cart.css' %}">
     </head>
     <body class="results-page">
         <div id="toast-container" aria-live="polite" aria-atomic="true"></div>
@@ -21,15 +22,25 @@
             <div class="container">
                 <div class="d-flex justify-content-between align-items-center flex-wrap">
                     <a href="{% url 'home' %}#search" class="back-link">Modify search</a>
-                    {% if tripPurpose %}
-                        <span class="trip-purpose">Flying for {{ tripPurpose }}</span>
-                    {% endif %}
+                    <div class="d-flex align-items-center flex-wrap" style="gap: 10px;">
+                        {% if tripPurpose %}
+                            <span class="trip-purpose">Flying for {{ tripPurpose }}</span>
+                        {% endif %}
+                        <a class="cart-shortcut" href="{% url 'cart_detail' %}">
+                            <i class="fas fa-shopping-cart" aria-hidden="true"></i>
+                            Cart <span class="cart-count-badge">{{ cart_count }}</span>
+                        </a>
+                    </div>
                 </div>
                 <div class="route-heading">
-                    <h1>{{ origin }} to {{ destination }}</h1>
+                    <h1>{{ route_title|default:origin }}</h1>
                     <p>
-                        {{ departureDate }}
-                        {% if returnDate %}<span>&harr;</span> {{ returnDate }}{% endif %}
+                        {% if route_subtitle %}
+                            {{ route_subtitle }}
+                        {% else %}
+                            {{ departureDate }}
+                            {% if returnDate %}<span>&harr;</span> {{ returnDate }}{% endif %}
+                        {% endif %}
                     </p>
                 </div>
             </div>
@@ -146,6 +157,8 @@
                                             <span>{{ r.airlines }}</span>
                                             {% if r.source == 'LIVE_FLIGHT_API' %}
                                                 <em>Live fare</em>
+                                            {% elif r.source == 'MULTI_CITY_LOCAL_FARE' %}
+                                                <em>Multi-city fare</em>
                                             {% else %}
                                                 <em>Local fare</em>
                                             {% endif %}
@@ -156,77 +169,37 @@
                                                 <span class="result-badge">Recommended</span>
                                             {% endif %}
 
-                                            <div class="leg-block">
-                                                <div class="leg-label">Departure</div>
-                                                <div class="route-line">
-                                                    <div class="route-point">
-                                                        <strong>{{ r.0firstFlightDepartureDate }}</strong>
-                                                        <span>{{ r.0firstFlightDepartureAirport }}</span>
-                                                    </div>
-                                                    <div class="route-track">
-                                                        <span>{{ r.0FlightTotalDuration }}</span>
-                                                        <i></i>
-                                                        {% if r.0secondFlightDepartureAirport %}
-                                                            <span>1 stop via {{ r.0firstFlightArrivalAirport }}</span>
-                                                        {% else %}
-                                                            <span>Non-stop</span>
-                                                        {% endif %}
-                                                    </div>
-                                                    <div class="route-point text-right">
-                                                        {% if r.0secondFlightDepartureAirport %}
-                                                            <strong>{{ r.0secondFlightArrivalDate }}</strong>
-                                                            <span>{{ r.0secondFlightArrivalAirport }}</span>
-                                                        {% else %}
-                                                            <strong>{{ r.0firstFlightArrivalDate }}</strong>
-                                                            <span>{{ r.0firstFlightArrivalAirport }}</span>
-                                                        {% endif %}
-                                                    </div>
-                                                </div>
-                                                <div class="segment-list">
-                                                    <span>{{ r.0firstFlightAirline }}: {{ r.0firstFlightDepartureAirport }} to {{ r.0firstFlightArrivalAirport }}</span>
-                                                    {% if r.0secondFlightDepartureAirport %}
-                                                        <span>{{ r.0secondFlightAirline }}: {{ r.0secondFlightDepartureAirport }} to {{ r.0secondFlightArrivalAirport }}</span>
-                                                        <span>Connection {{ r.0stop_time }}</span>
-                                                    {% endif %}
-                                                </div>
-                                            </div>
-
-                                            {% if r.1firstFlightDepartureAirport %}
-                                                <div class="leg-block return-leg">
-                                                    <div class="leg-label">Return</div>
+                                            {% for leg in r.legs %}
+                                                <div class="leg-block{% if not forloop.first %} return-leg{% endif %}">
+                                                    <div class="leg-label">{{ leg.label }}</div>
                                                     <div class="route-line">
                                                         <div class="route-point">
-                                                            <strong>{{ r.1firstFlightDepartureDate }}</strong>
-                                                            <span>{{ r.1firstFlightDepartureAirport }}</span>
+                                                            <strong>{{ leg.departure_time }}</strong>
+                                                            <span>{{ leg.origin }}</span>
+                                                            <small>{{ leg.departure_date }}</small>
                                                         </div>
                                                         <div class="route-track">
-                                                            <span>{{ r.1FlightTotalDuration }}</span>
+                                                            <span>{{ leg.duration }}</span>
                                                             <i></i>
-                                                            {% if r.1secondFlightDepartureAirport %}
-                                                                <span>1 stop via {{ r.1firstFlightArrivalAirport }}</span>
+                                                            {% if leg.stops %}
+                                                                <span>{{ leg.stops }} stop{{ leg.stops|pluralize }} via {{ leg.stop_airports|join:", " }}</span>
                                                             {% else %}
                                                                 <span>Non-stop</span>
                                                             {% endif %}
                                                         </div>
                                                         <div class="route-point text-right">
-                                                            {% if r.1secondFlightDepartureAirport %}
-                                                                <strong>{{ r.1secondFlightArrivalDate }}</strong>
-                                                                <span>{{ r.1secondFlightArrivalAirport }}</span>
-                                                            {% else %}
-                                                                <strong>{{ r.1firstFlightArrivalDate }}</strong>
-                                                                <span>{{ r.1firstFlightArrivalAirport }}</span>
-                                                            {% endif %}
+                                                            <strong>{{ leg.arrival_time }}</strong>
+                                                            <span>{{ leg.destination }}</span>
+                                                            <small>{{ leg.arrival_date }}</small>
                                                         </div>
                                                     </div>
                                                     <div class="segment-list">
-                                                        <span>{{ r.1firstFlightAirline }}: {{ r.1firstFlightDepartureAirport }} to {{ r.1firstFlightArrivalAirport }}</span>
-                                                        {% if r.1secondFlightDepartureAirport %}
-                                                            <span>{{ r.1secondFlightAirline }}: {{ r.1secondFlightDepartureAirport }} to {{ r.1secondFlightArrivalAirport }}</span>
-                                                            <span>Connection {{ r.1stop_time }}</span>
-                                                        {% endif %}
+                                                        {% for segment in leg.segments %}
+                                                            <span>{{ segment.airline }}: {{ segment.origin }} to {{ segment.destination }}</span>
+                                                        {% endfor %}
                                                     </div>
                                                 </div>
-                                            {% endif %}
+                                            {% endfor %}
                                         </div>
                                     </div>
 
@@ -234,11 +207,21 @@
                                         <span class="fare-label">Total</span>
                                         <strong class="price">&#8358;{{ r.price|floatformat:0|intcomma }}</strong>
                                         <span class="fare-meta">{{ r.cabin_display }} &middot; {{ r.seats|default:9 }} seats</span>
-                                        <form method="post" action="{% url 'book_flight' %}">
-                                            {% csrf_token %}
-                                            <input type="hidden" name="flight_data" value="{{ flight|urlencode }}">
-                                            <button type="submit" class="book-button btn btn-block">Book Flight</button>
-                                        </form>
+                                        <div class="result-actions">
+                                            <form method="post" action="{% url 'cart_add_flight' %}">
+                                                {% csrf_token %}
+                                                <input type="hidden" name="flight_data" value="{{ flight|urlencode }}">
+                                                <input type="hidden" name="next" value="{{ request.get_full_path }}">
+                                                <button type="submit" class="add-cart-button">
+                                                    <i class="fas fa-cart-plus" aria-hidden="true"></i> Add to cart
+                                                </button>
+                                            </form>
+                                            <form method="post" action="{% url 'book_flight' %}">
+                                                {% csrf_token %}
+                                                <input type="hidden" name="flight_data" value="{{ flight|urlencode }}">
+                                                <button type="submit" class="book-button btn btn-block">Book Flight</button>
+                                            </form>
+                                        </div>
                                     </div>
                                 </article>
                             {% endif %}

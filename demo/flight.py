@@ -24,9 +24,13 @@ class Flight:
         offer['seats'] = self.flight.get('numberOfBookableSeats', 0)
         offer['cabin'] = get_cabin(self.flight)
         offer['cabin_display'] = offer['cabin'].replace('_', ' ').title()
-        offer['trip_type'] = 'round-trip' if len(self.flight.get('itineraries', [])) > 1 else 'one-way'
+        offer['trip_type'] = self.flight.get(
+            'tripType',
+            'round-trip' if len(self.flight.get('itineraries', [])) > 1 else 'one-way',
+        )
         offer['airlines'] = ''
         offer['stops'] = 0
+        offer['legs'] = []
         airlines = []
 
         for f in self.flight['itineraries']:
@@ -37,6 +41,35 @@ class Flight:
                 carrier = segment.get('carrierCode')
                 if carrier and carrier not in airlines:
                     airlines.append(carrier)
+
+            first_segment = segments[0]
+            last_segment = segments[-1]
+            offer['legs'].append(
+                {
+                    'number': index + 1,
+                    'label': leg_label(offer['trip_type'], index),
+                    'origin': first_segment['departure']['iataCode'],
+                    'destination': last_segment['arrival']['iataCode'],
+                    'departure_date': first_segment['departure']['at'].split('T', 1)[0],
+                    'departure_time': get_hour(first_segment['departure']['at']),
+                    'arrival_date': last_segment['arrival']['at'].split('T', 1)[0],
+                    'arrival_time': get_hour(last_segment['arrival']['at']),
+                    'duration': self.flight['itineraries'][index].get('duration', '')[2:],
+                    'stops': max(len(segments) - 1, 0),
+                    'stop_airports': [
+                        segment['arrival']['iataCode']
+                        for segment in segments[:-1]
+                    ],
+                    'segments': [
+                        {
+                            'airline': segment.get('carrierCode', ''),
+                            'origin': segment.get('departure', {}).get('iataCode', ''),
+                            'destination': segment.get('arrival', {}).get('iataCode', ''),
+                        }
+                        for segment in segments
+                    ],
+                }
+            )
 
             if len(self.flight['itineraries'][index]['segments']) == 2:  # One-stop flight
                 offer[str(index) + 'firstFlightDepartureAirport'] = self.flight['itineraries'][index]['segments'][0]['departure']['iataCode']
@@ -87,6 +120,14 @@ def get_cabin(flight):
         return flight['travelerPricings'][0]['fareDetailsBySegment'][0]['cabin']
     except (KeyError, IndexError, TypeError):
         return 'ECONOMY'
+
+
+def leg_label(trip_type, index):
+    if trip_type == 'round-trip':
+        return 'Outbound' if index == 0 else 'Return'
+    if trip_type == 'multi-city':
+        return f'Flight {index + 1}'
+    return 'Departure'
 
 
 def get_stoptime(total_duration, first_flight_duration, second_flight_duration):
