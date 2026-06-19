@@ -29,15 +29,21 @@ urlpatterns = [
     path('administrator/report/', views.report, name='report'),
 
 
-    path('thrive-administrator/register/',
-         views.thrive_admin_register, name='thrive_admin_register'),
-    path('thrive-administrator/login/',
-         views.thrive_admin_login, name='thrive_admin_login'),
+    path('travel-agency/register/',
+         views.travel_agency_register, name='travel_agency_register'),
+    path('travel-agency/login/',
+         views.travel_agency_login, name='travel_agency_login'),
 
-    path('thrive-administrator/approve_admin/',
-         views.thrive_admin_approval_view, name='thrive_admin_approval_view'),
-    path('thrive-administrator/report/',
-         views.thrive_report, name='thrive_report'),
+    path('travel-agency/organizations/',
+         views.travel_agency_organizations, name='travel_agency_organizations'),
+    path('travel-agency/approve_admin/',
+         views.travel_agency_approval_view, name='travel_agency_approval_view'),
+    path('travel-agency/approve-agency/',
+         views.travel_agency_peer_approval_view, name='travel_agency_peer_approval_view'),
+    path('travel-agency/report/',
+         views.travel_agency_report, name='travel_agency_report'),
+    path('travel-agency/approved-flights/',
+         views.travel_agency_approved_flights, name='travel_agency_approved_flights'),
 
 
     path('staff-list/', views.staff_list, name='staff_list'),

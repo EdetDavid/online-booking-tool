@@ -153,6 +153,26 @@
                 <li>
                     <strong>Travel Class:</strong> {{ travel_class }}
                 </li>
+                {% if passenger_count %}
+                    <li>
+                        <strong>Passenger Count:</strong> {{ passenger_count }}
+                    </li>
+                {% endif %}
+                {% if organization %}
+                    <li>
+                        <strong>Organization:</strong> {{ organization.name }}
+                    </li>
+                {% endif %}
+                {% if travel_agency %}
+                    <li>
+                        <strong>Travel Agency:</strong> {{ travel_agency.admin.get_full_name|default:travel_agency.admin.username }}
+                    </li>
+                {% endif %}
+                {% if price %}
+                    <li>
+                        <strong>Approved Request Price:</strong> {{ price }}
+                    </li>
+                {% endif %}
             </ul>
             {% if response %}
                 <h2>Booking Details:</h2>

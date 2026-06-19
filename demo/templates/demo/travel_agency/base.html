@@ -130,26 +130,42 @@
             }
         }
     </style>
+    <link rel="stylesheet" href="{% static 'demo/css/responsive_nav.css' %}">
 </head>
-<body>
+<body class="dashboard-body">
+    <div class="sidebar-backdrop" aria-hidden="true"></div>
 
     <!-- Sidebar Section -->
-    <div class="sidebar">
-        <h2> Thrive Admin Dashboard</h2>
+    <div class="sidebar" id="dashboardSidebar">
+        <h2>Travel Agency Dashboard</h2>
        
        
-        <a class="my-2" href="{% url 'thrive_admin_approval_view' %}" class="{% if request.resolver_match.url_name == 'thrive_admin_approval_view' %}active{% endif %}">
+        <a class="my-2 {% if request.resolver_match.url_name == 'travel_agency_organizations' %}active{% endif %}" href="{% url 'travel_agency_organizations' %}">
+            <i class="fas fa-building"></i>Organizations</a>
+        <a class="my-2 {% if request.resolver_match.url_name == 'travel_agency_approved_flights' %}active{% endif %}" href="{% url 'travel_agency_approved_flights' %}">
+            <i class="fas fa-plane-departure"></i>Approved Flights</a>
+        <a class="my-2 {% if request.resolver_match.url_name == 'travel_agency_approval_view' %}active{% endif %}" href="{% url 'travel_agency_approval_view' %}">
             <i class="fas fa-check-circle"></i>Approve Admin</a>
-            <a class="my-2" href="{% url 'update_price_increment' %}" class="{% if request.resolver_match.url_name == 'update_price_increment' %}active{% endif %}">
+        <a class="my-2 {% if request.resolver_match.url_name == 'travel_agency_peer_approval_view' %}active{% endif %}" href="{% url 'travel_agency_peer_approval_view' %}">
+            <i class="fas fa-user-check"></i>Approve Travel Agency</a>
+            <a class="my-2 {% if request.resolver_match.url_name == 'update_price_increment' %}active{% endif %}" href="{% url 'update_price_increment' %}">
                 <i class="fas fa-dollar-sign"></i>Mark Up</a>
             
-        <a class="my-2" href="{% url 'thrive_report' %}" class="{% if request.resolver_match.url_name == 'thrive_report' %}active{% endif %}">
+        <a class="my-2 {% if request.resolver_match.url_name == 'travel_agency_report' %}active{% endif %}" href="{% url 'travel_agency_report' %}">
             <i class="fas fa-chart-line"></i>Reports</a>
     </div>
 
     <!-- Main Content Section -->
     <div class="main-content">
         <div class="navbar">
+            <button type="button"
+                    class="sidebar-toggle"
+                    title="Toggle navigation"
+                    aria-controls="dashboardSidebar"
+                    aria-expanded="false"
+                    aria-label="Toggle navigation">
+                <i class="fas fa-bars"></i>
+            </button>
             <h1>Welcome, {{ request.user.username }}</h1>
             <a href="{% url 'logout' %}">Logout</a>  
         </div>
@@ -162,5 +178,6 @@
         </div>
     </div>
 
+    <script src="{% static 'demo/js/responsive_nav.js' %}"></script>
 </body>
 </html>

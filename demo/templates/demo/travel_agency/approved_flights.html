@@ -1,0 +1,195 @@
+{% extends 'demo/travel_agency/base.html' %}
+
+{% block content %}
+<style>
+    .approved-flight-page {
+        max-width: 1200px;
+        margin: 0 auto;
+        padding: 24px;
+    }
+
+    .approved-flight-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: flex-end;
+        gap: 16px;
+        margin-bottom: 20px;
+    }
+
+    .approved-flight-header h2 {
+        color: #0f172a;
+        font-size: 28px;
+        margin: 0;
+    }
+
+    .approved-flight-header p {
+        color: #64748b;
+        margin: 6px 0 0;
+    }
+
+    .approved-flight-count {
+        background: #e0f2fe;
+        color: #0369a1;
+        border-radius: 999px;
+        font-weight: 700;
+        padding: 8px 14px;
+        white-space: nowrap;
+    }
+
+    .approved-flight-table {
+        background: #ffffff;
+        border: 1px solid #e2e8f0;
+        border-radius: 8px;
+        overflow: hidden;
+    }
+
+    .approved-flight-table table {
+        width: 100%;
+        border-collapse: collapse;
+    }
+
+    .approved-flight-table th,
+    .approved-flight-table td {
+        padding: 14px 16px;
+        text-align: left;
+        border-bottom: 1px solid #e2e8f0;
+        vertical-align: top;
+    }
+
+    .approved-flight-table th {
+        background: #f8fafc;
+        color: #334155;
+        font-size: 13px;
+        text-transform: uppercase;
+    }
+
+    .approved-flight-table tr:last-child td {
+        border-bottom: none;
+    }
+
+    .status-pill {
+        display: inline-flex;
+        align-items: center;
+        border-radius: 999px;
+        background: #dcfce7;
+        color: #166534;
+        font-weight: 700;
+        padding: 6px 10px;
+        font-size: 13px;
+    }
+
+    .muted {
+        color: #64748b;
+        font-size: 13px;
+    }
+
+    @media (max-width: 768px) {
+        .approved-flight-page {
+            padding: 16px;
+        }
+
+        .approved-flight-header {
+            align-items: flex-start;
+            flex-direction: column;
+        }
+
+        .approved-flight-table table,
+        .approved-flight-table thead,
+        .approved-flight-table tbody,
+        .approved-flight-table th,
+        .approved-flight-table td,
+        .approved-flight-table tr {
+            display: block;
+        }
+
+        .approved-flight-table thead {
+            display: none;
+        }
+
+        .approved-flight-table tr {
+            border-bottom: 1px solid #e2e8f0;
+            padding: 12px 0;
+        }
+
+        .approved-flight-table td {
+            border-bottom: none;
+            display: grid;
+            grid-template-columns: 120px 1fr;
+            gap: 12px;
+            padding: 8px 16px;
+        }
+
+        .approved-flight-table td::before {
+            content: attr(data-label);
+            color: #475569;
+            font-weight: 700;
+        }
+    }
+</style>
+
+<div class="approved-flight-page">
+    <div class="approved-flight-header">
+        <div>
+            <h2>Approved Flights</h2>
+            <p>Corporate flight requests approved by organization admins and ready for agency handling.</p>
+        </div>
+        <span class="approved-flight-count">{{ approved_flights|length }} approved</span>
+    </div>
+
+    <div class="approved-flight-table">
+        <table>
+            <thead>
+                <tr>
+                    <th>Traveler</th>
+                    <th>Organization</th>
+                    <th>Route</th>
+                    <th>Travel Date</th>
+                    <th>Class</th>
+                    <th>Passengers</th>
+                    <th>Approved By</th>
+                    <th>Status</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for flight in approved_flights %}
+                    <tr>
+                        <td data-label="Traveler">
+                            {% with traveler=flight.requesting_user %}
+                                {% if traveler %}
+                                    {{ traveler.get_full_name|default:traveler.username }}
+                                    <div class="muted">{{ traveler.email }}</div>
+                                {% else %}
+                                    Unassigned
+                                {% endif %}
+                            {% endwith %}
+                        </td>
+                        <td data-label="Organization">{{ flight.organization|default:"Unassigned" }}</td>
+                        <td data-label="Route">{{ flight.origin }} to {{ flight.destination }}</td>
+                        <td data-label="Travel Date">
+                            {{ flight.departure_date }}
+                            {% if flight.return_date %}
+                                <div class="muted">Return {{ flight.return_date }}</div>
+                            {% endif %}
+                        </td>
+                        <td data-label="Class">{{ flight.travel_class }}</td>
+                        <td data-label="Passengers">{{ flight.passenger_count }}</td>
+                        <td data-label="Approved By">
+                            {% if flight.approved_by_admin %}
+                                {{ flight.approved_by_admin.admin.get_full_name|default:flight.approved_by_admin.admin.username }}
+                                <div class="muted">{{ flight.approved_by_admin.admin.email }}</div>
+                            {% else %}
+                                <span class="muted">Not recorded</span>
+                            {% endif %}
+                        </td>
+                        <td data-label="Status"><span class="status-pill">Approved</span></td>
+                    </tr>
+                {% empty %}
+                    <tr>
+                        <td colspan="8">No approved flight requests are available for this agency yet.</td>
+                    </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endblock %}

@@ -90,8 +90,18 @@
         <h2>Flight Approval Required</h2>
         <p>Dear Admin,</p>
         <p>
-            A flight booking request has been submitted by <span class="strong">{{ user.first_name }} {{ user.last_name }}</span> and is pending your approval.
+            A corporate flight request has been submitted by <span class="strong">{{ user.first_name }} {{ user.last_name }}</span> and is pending your approval.
         </p>
+        {% if organization %}
+            <p>
+                <span class="strong">Organization:</span> {{ organization.name }}
+            </p>
+        {% endif %}
+        {% if travel_agency %}
+            <p>
+                <span class="strong">Mapped Travel Agency:</span> {{ travel_agency.admin.get_full_name|default:travel_agency.admin.username }}
+            </p>
+        {% endif %}
         <p>Here are the details of the flight booking:</p>
         <ul>
             <li>
@@ -117,10 +127,8 @@
             </li>
         </ul>
         <p>
-            Please review and approve the flight booking request. Click the button below to proceed with the approval process.
+            Please review this request from your admin dashboard. Once approved, the requesting staff member and the mapped travel agency will be notified.
         </p>
-        <a href="https://your-booking-site.com/approve-flight/{{ booking_id }}" class="btn">Approve Flight</a>
-        <a href="https://your-booking-site.com/decline-flight/{{ booking_id }}" class="btn-decline">Decline Flight</a>
         <p>Thank you for your attention.</p>
         <p>
             Best regards,<br>
@@ -128,7 +136,7 @@
         </p>
     </div>
     <footer>
-        &copy; 2024 Your Booking Site. All rights reserved.
+        &copy; 2026 Online Booking Tool. All rights reserved.
     </footer>
 </body>
 </html>

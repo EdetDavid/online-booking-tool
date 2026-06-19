@@ -1,0 +1,259 @@
+{% extends 'demo/travel_agency/base.html' %}
+
+{% block title %}Corporate Organizations{% endblock %}
+
+{% block content %}
+<style>
+    .container {
+        max-width: 1200px;
+        margin: 0 auto;
+        padding: 20px;
+    }
+
+    .panel {
+        background: #ffffff;
+        border-radius: 8px;
+        box-shadow: 0 8px 16px rgba(0, 0, 0, 0.08);
+        padding: 24px;
+        margin-bottom: 24px;
+    }
+
+    h1, h2 {
+        color: #007bff;
+        margin-bottom: 18px;
+    }
+
+    .message {
+        padding: 10px 12px;
+        border-radius: 5px;
+        margin-bottom: 12px;
+        background: #e9f5ff;
+        color: #174b75;
+    }
+
+    .form-grid {
+        display: grid;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: 16px;
+        align-items: end;
+    }
+
+    .form-group label {
+        display: block;
+        font-weight: 600;
+        margin-bottom: 6px;
+    }
+
+    .form-group input,
+    .form-group select {
+        width: 100%;
+        padding: 10px;
+        border: 1px solid #cfd7df;
+        border-radius: 5px;
+    }
+
+    .error-message {
+        color: #dc3545;
+        font-size: 14px;
+        margin-top: 5px;
+    }
+
+    .btn-primary,
+    .btn-secondary,
+    .btn-toggle {
+        border: none;
+        border-radius: 5px;
+        padding: 10px 16px;
+        cursor: pointer;
+        color: #ffffff;
+    }
+
+    .btn-primary {
+        background: #007bff;
+    }
+
+    .btn-secondary {
+        background: #198754;
+    }
+
+    .btn-toggle {
+        background: #6c757d;
+    }
+
+    .actions {
+        display: flex;
+        gap: 8px;
+        align-items: center;
+        flex-wrap: wrap;
+    }
+
+    .inline-form {
+        display: contents;
+    }
+
+    table {
+        width: 100%;
+        border-collapse: collapse;
+    }
+
+    th, td {
+        padding: 12px;
+        border-bottom: 1px solid #e5e9ef;
+        text-align: left;
+        vertical-align: middle;
+    }
+
+    thead {
+        background: #007bff;
+        color: #ffffff;
+    }
+
+    .status-active {
+        color: #198754;
+        font-weight: 600;
+    }
+
+    .status-inactive {
+        color: #dc3545;
+        font-weight: 600;
+    }
+
+    @media (max-width: 768px) {
+        .form-grid {
+            grid-template-columns: 1fr;
+        }
+    }
+</style>
+
+<div class="container">
+    {% if messages %}
+        {% for message in messages %}
+            <div class="message">{{ message }}</div>
+        {% endfor %}
+    {% endif %}
+
+    <div class="panel">
+        <h1>Corporate Organizations</h1>
+        <form method="post">
+            {% csrf_token %}
+            <div class="form-grid">
+                <div class="form-group">
+                    {{ form.name.label_tag }}
+                    {{ form.name }}
+                    {% if form.name.errors %}<div class="error-message">{{ form.name.errors }}</div>{% endif %}
+                </div>
+                <div class="form-group">
+                    {{ form.join_code.label_tag }}
+                    {{ form.join_code }}
+                    {% if form.join_code.errors %}<div class="error-message">{{ form.join_code.errors }}</div>{% endif %}
+                </div>
+                <div class="form-group">
+                    <label>&nbsp;</label>
+                    <button type="submit" class="btn-primary">Add Organization</button>
+                </div>
+            </div>
+        </form>
+    </div>
+
+    <div class="panel">
+        <h2>Managed Clients</h2>
+        <table>
+            <thead>
+                <tr>
+                    <th>Organization</th>
+                    <th>Join Code</th>
+                    <th>Status</th>
+                    <th>Action</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for organization in organizations %}
+                    <tr>
+                        <td>
+                            <input type="text"
+                                   name="name"
+                                   value="{{ organization.name }}"
+                                   aria-label="Organization name"
+                                   form="update-organization-{{ organization.id }}">
+                        </td>
+                        <td>
+                            <input type="text"
+                                   name="join_code"
+                                   value="{{ organization.join_code }}"
+                                   aria-label="Organization join code"
+                                   form="update-organization-{{ organization.id }}">
+                        </td>
+                        <td>
+                            {% if organization.active %}
+                                <span class="status-active">Active</span>
+                            {% else %}
+                                <span class="status-inactive">Inactive</span>
+                            {% endif %}
+                        </td>
+                        <td>
+                            <div class="actions">
+                                <form method="post" id="update-organization-{{ organization.id }}">
+                                    {% csrf_token %}
+                                    <input type="hidden" name="organization_id" value="{{ organization.id }}">
+                                    <button type="submit" name="action" value="update" class="btn-secondary">Save</button>
+                                </form>
+                                <form method="post">
+                                    {% csrf_token %}
+                                    <input type="hidden" name="organization_id" value="{{ organization.id }}">
+                                    <button type="submit" name="action" value="toggle" class="btn-toggle">
+                                        {% if organization.active %}Deactivate{% else %}Activate{% endif %}
+                                    </button>
+                                </form>
+                            </div>
+                        </td>
+                    </tr>
+                {% empty %}
+                    <tr>
+                        <td colspan="4">No corporate organizations yet.</td>
+                    </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+
+    <div class="panel">
+        <h2>Existing Unassigned Organizations</h2>
+        <table>
+            <thead>
+                <tr>
+                    <th>Organization</th>
+                    <th>Join Code</th>
+                    <th>Status</th>
+                    <th>Action</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for organization in available_organizations %}
+                    <tr>
+                        <td>{{ organization.name }}</td>
+                        <td>{{ organization.join_code }}</td>
+                        <td>
+                            {% if organization.active %}
+                                <span class="status-active">Active</span>
+                            {% else %}
+                                <span class="status-inactive">Inactive</span>
+                            {% endif %}
+                        </td>
+                        <td>
+                            <form method="post">
+                                {% csrf_token %}
+                                <input type="hidden" name="organization_id" value="{{ organization.id }}">
+                                <button type="submit" name="action" value="claim" class="btn-primary">Manage</button>
+                            </form>
+                        </td>
+                    </tr>
+                {% empty %}
+                    <tr>
+                        <td colspan="4">No unassigned organizations available.</td>
+                    </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endblock %}

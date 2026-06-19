@@ -1,9 +1,9 @@
 from django.utils.html import strip_tags
 from django.core.mail import EmailMultiAlternatives
 from django.db import transaction
+from django.db.models import Q
 from django.conf import settings
 from django.template.loader import render_to_string
-from django.core.mail import EmailMessage
 import json
 import ast
 import urllib.parse
@@ -11,9 +11,13 @@ import csv
 import xlwt
 import logging
 import requests
+from functools import wraps
 from amadeus import Client, ResponseError, Location
 from django.shortcuts import render, redirect, get_object_or_404
 from django.contrib import messages
+from django.urls import reverse
+from django.utils.http import url_has_allowed_host_and_scheme
+from django.views.decorators.cache import never_cache
 from .flight import Flight
 from .booking import Booking
 from .hotel import Hotel, format_price_naira
@@ -37,16 +41,105 @@ from .local_hotels import (
     local_room_search,
     normalize_city_code,
 )
-from .models import Admin, Staff, Profile, Flight_model, PriceIncrement, ThriveAdmin
+from .models import Admin, Staff, Profile, Flight_model, PriceIncrement, Organization, TravelAgency
+from .role_email import (
+    role_recipients,
+    send_html_email,
+)
 from django.http import HttpResponse
 from django.contrib.auth.decorators import login_required
-from django.contrib.auth.forms import AuthenticationForm
-from .forms import AdminUserCreationForm, StaffUserCreationForm, ProfileForm, ThriveAdminUserCreationForm
+from .forms import (
+    AdminUserCreationForm,
+    StaffUserCreationForm,
+    ProfileForm,
+    StandardAuthenticationForm,
+    TravelAgencyAuthenticationForm,
+    TravelAgencyOrganizationForm,
+    TravelAgencyUserCreationForm,
+    normalize_company_code,
+)
 from django.contrib.auth import login as auth_login, logout as auth_logout, authenticate
 logger = logging.getLogger(__name__)
 
 
 amadeus = Client()
+
+
+def csrf_failure(request, reason=""):
+    messages.error(
+        request,
+        "Your session expired. Please refresh the page and try again.",
+    )
+    referer = request.META.get('HTTP_REFERER')
+    if referer and url_has_allowed_host_and_scheme(
+        referer,
+        allowed_hosts={request.get_host()},
+        require_https=request.is_secure(),
+    ):
+        return redirect(referer)
+    return redirect(reverse('login'))
+
+
+def staff_profile_for_user(user):
+    if not user.is_authenticated:
+        return None
+    return Staff.objects.select_related('organization').filter(staff=user).first()
+
+
+def admin_profile_for_user(user):
+    if not user.is_authenticated:
+        return None
+    return Admin.objects.select_related('organization').filter(admin=user).first()
+
+
+def travel_agency_profile_for_user(user):
+    if not user.is_authenticated:
+        return None
+    return TravelAgency.objects.filter(admin=user, approval_status=True).first()
+
+
+def redirect_for_user(user):
+    if not user.is_authenticated:
+        return 'home'
+    if TravelAgency.objects.filter(admin=user, approval_status=True).exists():
+        return 'travel_agency_organizations'
+    if Admin.objects.filter(admin=user, approval_status=True).exists():
+        return 'admin_profile'
+    if Staff.objects.filter(staff=user).exists():
+        return 'profile'
+    return 'home'
+
+
+def role_required(profile_getter, login_url, role_name):
+    def decorator(view_func):
+        @wraps(view_func)
+        @login_required(login_url=login_url)
+        def wrapper(request, *args, **kwargs):
+            if profile_getter(request.user):
+                return view_func(request, *args, **kwargs)
+            messages.error(request, f'You do not have {role_name} access.')
+            return redirect(redirect_for_user(request.user))
+        return wrapper
+    return decorator
+
+
+staff_required = role_required(staff_profile_for_user, 'login', 'staff')
+admin_required = role_required(admin_profile_for_user, 'admin_login', 'admin')
+travel_agency_required = role_required(
+    travel_agency_profile_for_user,
+    'travel_agency_login',
+    'travel agency',
+)
+
+
+def first_organization_admin(organization):
+    if not organization:
+        return None
+    return Admin.objects.filter(
+        organization=organization,
+        approval_status=True,
+        admin__is_active=True,
+    ).first()
 
 
 # ==========   ADMIN ============== >
@@ -62,10 +155,16 @@ def admin_register(request):
 
             # Create a Profile for the user
             Profile.objects.create(user=user)
+            organization = form.cleaned_data.get('organization')
+            if not organization:
+                organization = Organization.get_or_create_by_name(
+                    form.cleaned_data['organization_name']
+                )
 
             # Create the Admin profile with approval_status = False (unapproved)
             Admin.objects.create(
                 admin=user,
+                organization=organization,
                 first_name=user.first_name,
                 last_name=user.last_name,
                 phone=user.phone,  # Assuming phone is captured in the form
@@ -91,9 +190,10 @@ def admin_register(request):
     return render(request, 'demo/admin/admin_register.html', {'form': form})
 
 
+@never_cache
 def admin_login(request):
     if request.method == 'POST':
-        form = AuthenticationForm(data=request.POST)
+        form = StandardAuthenticationForm(data=request.POST)
         if form.is_valid():
             username = form.cleaned_data.get('username')
             password = form.cleaned_data.get('password')
@@ -119,25 +219,41 @@ def admin_login(request):
             else:
                 messages.error(request, 'Invalid username or password.')
     else:
-        form = AuthenticationForm()
+        form = StandardAuthenticationForm()
 
     return render(request, 'demo/admin/admin_login.html', {'form': form})
 
 
+@admin_required
 def admin_approval_view(request):
+    current_admin = get_object_or_404(
+        Admin, admin=request.user, approval_status=True)
+
     # Fetch all pending admins where approval_status is False
-    pending_admins = Admin.objects.filter(approval_status=False)
+    pending_admins = Admin.objects.select_related(
+        'admin',
+        'organization',
+    ).filter(approval_status=False).exclude(id=current_admin.id)
 
     if request.method == 'POST':
         admin_id = request.POST.get('admin_id')
         action = request.POST.get('action')
 
-        # Fetch the admin by ID
-        admin = get_object_or_404(Admin, id=admin_id)
+        # Fetch the admin by ID within the visible organization scope
+        admin = get_object_or_404(pending_admins, id=admin_id)
 
         if action == 'approve':
             admin.approval_status = True  # Approve the admin
             admin.save()
+            if (
+                current_admin.organization_id
+                and admin.organization_id
+                and admin.organization_id != current_admin.organization_id
+            ):
+                messages.info(
+                    request,
+                    f'{admin.admin.username} belongs to {admin.organization.name}; you approved them outside your own organization.'
+                )
             messages.success(
                 request, f'{admin.admin.username} has been approved as an admin.')
         elif action == 'disapprove':
@@ -152,7 +268,7 @@ def admin_approval_view(request):
     return render(request, 'demo/admin/admin_approval.html', {'pending_admins': pending_admins})
 
 
-@login_required(login_url="admin_login")
+@admin_required
 def admin_dashboard(request):
     return render(request, 'demo/admin/base.html')
 
@@ -162,53 +278,43 @@ def coming_soon(request):
     return render(request, 'demo/coming_soon.html')
 
 
-@login_required(login_url='admin_login')
+@admin_required
 def approve_flight(request):
+    admin_profile = admin_profile_for_user(request.user)
+
     if request.method == 'POST':
         # Get selected flights
         flight_ids = request.POST.getlist('flight_ids')
 
         if flight_ids:
             flights = Flight_model.objects.filter(id__in=flight_ids)
+            if admin_profile and admin_profile.organization_id:
+                flights = flights.filter(
+                    organization=admin_profile.organization)
 
             for flight in flights:
                 flight.approved = True
+                if admin_profile:
+                    flight.approved_by_admin = admin_profile
+                    if not flight.assigned_admin_id:
+                        flight.assigned_admin = admin_profile
                 flight.save()
                 messages.success(
                     request, f'Flight {flight.origin} to {flight.destination} on {flight.departure_date} has been approved.')
 
-                # Prepare email context
-                email_context = {
-                    'user': flight.user,  # Assuming the Flight model has a foreign key to User
-                    'origin': flight.origin,
-                    'destination': flight.destination,
-                    'departure_date': flight.departure_date,
-                }
-
-                # Render the HTML email template
-                email_body = render_to_string(
-                    'demo/email/flight_approval_email.html', email_context)
-
-                # Create email message
-                email = EmailMultiAlternatives(
-                    subject='Your Flight Booking Has Been Approved',
-                    body='This is an HTML email. Please view it in a browser.',
-                    from_email=settings.EMAIL_HOST_USER,
-                    to=[flight.user.email],
-                )
-
-                # Attach the HTML body to the email
-                email.attach_alternative(email_body, "text/html")
-                email.send(fail_silently=False)
-                print(f"Sent email to {flight.user.email}")
+                send_flight_approval_email(flight)
 
             return redirect('approve_flight')
 
     # Fetch all flights where approval status is False
     pending_flights = Flight_model.objects.filter(approved=False)
+    if admin_profile and admin_profile.organization_id:
+        pending_flights = pending_flights.filter(
+            organization=admin_profile.organization)
     return render(request, 'demo/admin/approve_flight.html', {'pending_flights': pending_flights})
 
 
+@admin_required
 def admin_profile_view(request):
     # Ensure the user is authenticated before accessing the profile page
     profile = request.user.profile
@@ -229,6 +335,7 @@ def admin_profile_view(request):
     })
 
 
+@admin_required
 def admin_update_profile_picture(request):
     if request.method == 'POST':
         profile_picture = request.FILES.get('profile_picture')
@@ -243,18 +350,29 @@ def admin_update_profile_picture(request):
     return render(request, 'demo/admin/profile.html', {'error_message': messages.get_messages(request)})
 
 
+@admin_required
 def staff_list(request):
     profile = request.user.profile
     form = ProfileForm(instance=profile)
-    staffs = Staff.objects.all()  # Fetch all staff members
+    admin_profile = admin_profile_for_user(request.user)
+    staffs = Staff.objects.all()
+    if admin_profile and admin_profile.organization_id:
+        staffs = staffs.filter(organization=admin_profile.organization)
     return render(request, 'demo/admin/staff_list.html', {'staffs': staffs, 'form': form})
 
 
 # Admin Report
+@admin_required
 def report(request):
+    admin_profile = admin_profile_for_user(request.user)
     flights = Flight_model.objects.all()
     staff_members = Staff.objects.all()
     admins = Admin.objects.all()
+    if admin_profile and admin_profile.organization_id:
+        flights = flights.filter(organization=admin_profile.organization)
+        staff_members = staff_members.filter(
+            organization=admin_profile.organization)
+        admins = admins.filter(organization=admin_profile.organization)
 
     # Handle Export to CSV, Excel, or PDF
     if 'export' in request.GET:
@@ -281,12 +399,16 @@ def export_combined_to_csv(flights, staff_members, admins):
 
     writer = csv.writer(response)
     writer.writerow(['Flight Report'])
-    writer.writerow(['First Name', 'Last Name', 'Origin', 'Destination',
+    writer.writerow(['First Name', 'Last Name', 'Organization', 'Agent', 'Origin', 'Destination',
                     'Travel Class', 'Departure Date', 'Return Date', 'Approved'])
     for flight in flights:
+        requester = flight.requesting_user()
+        travel_agency = flight.mapped_travel_agency()
         writer.writerow([
-            flight.user.first_name,
-            flight.user.last_name,
+            requester.first_name if requester else '',
+            requester.last_name if requester else '',
+            flight.organization.name if flight.organization else '',
+            str(travel_agency) if travel_agency else '',
             flight.origin,
             flight.destination,
             flight.travel_class,
@@ -336,21 +458,25 @@ def export_combined_to_excel(flights, staff_members, admins):
     # Flight Report
     ws.write(row, 0, 'Flight Report')
     row += 1
-    columns = ['First Name', 'Last Name', 'Origin', 'Destination',
-               'Travel Class', 'Departure Date', 'Return Date', 'Approved']
+    columns = ['First Name', 'Last Name', 'Organization', 'Agent',
+               'Origin', 'Destination', 'Travel Class', 'Departure Date', 'Return Date', 'Approved']
     for col_num, column in enumerate(columns):
         ws.write(row, col_num, column)
     row += 1
     for flight in flights:
-        ws.write(row, 0, flight.user.first_name)
-        ws.write(row, 1, flight.user.last_name)
-        ws.write(row, 2, flight.origin)
-        ws.write(row, 3, flight.destination)
-        ws.write(row, 4, flight.travel_class)
-        ws.write(row, 5, flight.departure_date.strftime('%Y-%m-%d'))
-        ws.write(row, 6, flight.return_date.strftime(
+        requester = flight.requesting_user()
+        travel_agency = flight.mapped_travel_agency()
+        ws.write(row, 0, requester.first_name if requester else '')
+        ws.write(row, 1, requester.last_name if requester else '')
+        ws.write(row, 2, flight.organization.name if flight.organization else '')
+        ws.write(row, 3, str(travel_agency) if travel_agency else '')
+        ws.write(row, 4, flight.origin)
+        ws.write(row, 5, flight.destination)
+        ws.write(row, 6, flight.travel_class)
+        ws.write(row, 7, flight.departure_date.strftime('%Y-%m-%d'))
+        ws.write(row, 8, flight.return_date.strftime(
             '%Y-%m-%d') if flight.return_date else '')
-        ws.write(row, 7, 'Approved' if flight.approved else 'Unapproved')
+        ws.write(row, 9, 'Approved' if flight.approved else 'Unapproved')
         row += 1
 
     ws.write(row, 0, 'Staff Report')
@@ -409,7 +535,8 @@ def export_combined_to_pdf(request, flights, staff_members, admins):
         # requires native libraries (gobject/pango); failing import should not
         # crash the whole application.
         logger.error(f"WeasyPrint unavailable or runtime error: {e}")
-        messages.error(request, "PDF generation requires WeasyPrint native dependencies (gobject/pango). See README for setup or install the required runtime.")
+        messages.error(
+            request, "PDF generation requires WeasyPrint native dependencies (gobject/pango). See README for setup or install the required runtime.")
         # Fallback: return rendered HTML so the user still gets the report content
         return HttpResponse(html_string, content_type='text/html')
 
@@ -435,9 +562,10 @@ def staff_register(request):
     return render(request, 'demo/auth/register.html', {'form': form})
 
 
+@never_cache
 def staff_login(request):
     if request.method == 'POST':
-        form = AuthenticationForm(data=request.POST)
+        form = StandardAuthenticationForm(data=request.POST)
         if form.is_valid():
             user = form.get_user()
             # Check if the user has a corresponding Staff profile
@@ -453,34 +581,49 @@ def staff_login(request):
         else:
             messages.error(request, 'Invalid username or password.')
     else:
-        form = AuthenticationForm()
+        form = StandardAuthenticationForm()
 
     return render(request, 'demo/auth/login.html', {'form': form})
 
 
+@staff_required
 def pending_flights(request):
     # Get the authenticated user
     user = request.user
+    staff_profile = staff_profile_for_user(user)
 
     # Filter flights where `approved` is False and `user` is the authenticated user
-    pending_flights = Flight_model.objects.filter(
-        user=user, approved=False).order_by('-departure_date')
+    pending_flights = Flight_model.objects.filter(approved=False)
+    if staff_profile:
+        pending_flights = pending_flights.filter(
+            requested_by_staff=staff_profile)
+    else:
+        pending_flights = pending_flights.filter(user=user)
+    pending_flights = pending_flights.order_by('-departure_date')
     return render(request, 'demo/staff/pending_flights.html', {'pending_flights': pending_flights})
 
 
+@staff_required
 def approved_flights(request):
     # Get the authenticated user
     user = request.user
+    staff_profile = staff_profile_for_user(user)
 
     # Filter flights where `approved` is True and `user` is the authenticated user
-    approved_flights = Flight_model.objects.filter(
-        user=user, approved=True).order_by('-departure_date')
+    approved_flights = Flight_model.objects.filter(approved=True)
+    if staff_profile:
+        approved_flights = approved_flights.filter(
+            requested_by_staff=staff_profile)
+    else:
+        approved_flights = approved_flights.filter(user=user)
+    approved_flights = approved_flights.order_by('-departure_date')
 
     return render(request, 'demo/staff/approved_flights.html', {'approved_flights': approved_flights})
 
 
 # =========     PROFILE ===================>
 
+@staff_required
 def profile_view(request):
     # Ensure the user is authenticated before accessing the profile page
     profile = request.user.profile
@@ -501,6 +644,7 @@ def profile_view(request):
     })
 
 
+@staff_required
 def update_profile_picture(request):
     if request.method == 'POST':
         profile_picture = request.FILES.get('profile_picture')
@@ -529,6 +673,7 @@ def logout_view(request):
 
 # Price Markup
 
+@travel_agency_required
 def update_price_increment(request):
     # Get the current increment value or create one if it doesn't exist
     increment, created = PriceIncrement.objects.get_or_create(
@@ -542,7 +687,7 @@ def update_price_increment(request):
         # Redirect after saving to avoid resubmitting the form
         return redirect('update_price_increment')
 
-    return render(request, 'demo/thrive_admin/update_price.html', {'increment_value': increment.increment_value})
+    return render(request, 'demo/travel_agency/update_price.html', {'increment_value': increment.increment_value})
 
 
 def demo(request):
@@ -587,7 +732,8 @@ def demo(request):
                 search_flights = amadeus.shopping.flight_offers_search.get(
                     **kwargs)
             except Exception as error:
-                logger.warning(f"Amadeus flight search unavailable, using local fares: {error}")
+                logger.warning(
+                    f"Amadeus flight search unavailable, using local fares: {error}")
 
         search_flights_returned = []
         raw_flights = list(search_flights.data) if search_flights else []
@@ -602,11 +748,14 @@ def demo(request):
                 passenger_count=passenger_count,
                 cabin=cabin_class,
             )
-            raw_flights.extend(local_fares[:max(minimum_results - len(raw_flights), 0)])
+            raw_flights.extend(
+                local_fares[:max(minimum_results - len(raw_flights), 0)])
             if local_fares and not search_flights:
-                messages.info(request, "Showing locally priced fares while live airline pricing is unavailable.")
+                messages.info(
+                    request, "Showing locally priced fares while live airline pricing is unavailable.")
             elif local_fares:
-                messages.info(request, "Showing additional local fare options for this route.")
+                messages.info(
+                    request, "Showing additional local fare options for this route.")
 
         for flight in raw_flights:
             offer = Flight(flight).construct_flights()
@@ -658,6 +807,7 @@ def get_access_token():
         raise Exception(f"Failed to get access token: {str(e)}")
 
 
+@staff_required
 def book_flight(request):
     if request.method != 'POST':
         messages.error(request, "Invalid request method")
@@ -683,7 +833,8 @@ def book_flight(request):
             try:
                 flight_data = ast.literal_eval(decoded)
             except Exception as eval_err:
-                logger.exception(f"Failed to parse flight data: json_err={json_err}, eval_err={eval_err}")
+                logger.exception(
+                    f"Failed to parse flight data: json_err={json_err}, eval_err={eval_err}")
                 messages.error(request, "Invalid flight data format")
                 return redirect('home')
 
@@ -702,6 +853,10 @@ def book_flight(request):
 
         # Multiply the price by 1600
         price_in_local_currency = price * 1600
+        staff_profile = staff_profile_for_user(request.user)
+        organization = staff_profile.organization if staff_profile else None
+        travel_agency = organization.travel_agency if organization else None
+        assigned_admin = first_organization_admin(organization)
 
         # Check if the flight already exists
         existing_flight = Flight_model.objects.filter(
@@ -717,8 +872,12 @@ def book_flight(request):
 
         # If the flight doesn't exist, create it
         if not existing_flight:
-            Flight_model.objects.create(
+            flight_request = Flight_model.objects.create(
                 user=request.user,
+                requested_by_staff=staff_profile,
+                organization=organization,
+                travel_agency=travel_agency,
+                assigned_admin=assigned_admin,
                 origin=origin,
                 destination=destination,
                 departure_date=departure_date,
@@ -727,6 +886,23 @@ def book_flight(request):
                 travel_class=travel_class,
                 price=price_in_local_currency
             )
+        else:
+            flight_request = existing_flight
+            changed_fields = []
+            if staff_profile and not flight_request.requested_by_staff_id:
+                flight_request.requested_by_staff = staff_profile
+                changed_fields.append('requested_by_staff')
+            if organization and not flight_request.organization_id:
+                flight_request.organization = organization
+                changed_fields.append('organization')
+            if travel_agency and flight_request.travel_agency_id != travel_agency.id:
+                flight_request.travel_agency = travel_agency
+                changed_fields.append('travel_agency')
+            if assigned_admin and not flight_request.assigned_admin_id:
+                flight_request.assigned_admin = assigned_admin
+                changed_fields.append('assigned_admin')
+            if changed_fields:
+                flight_request.save(update_fields=changed_fields)
 
         print(f"Extracted flight details: departure_date={departure_date}, return_date={return_date}, "
               f"passenger_count={passenger_count}, travel_class={travel_class}, "
@@ -759,7 +935,9 @@ def book_flight(request):
                         destination,
                         departure_date,
                         return_date,
-                        passenger_name_record
+                        passenger_name_record,
+                        travel_class,
+                        approved_flight
                     )
                     return render(request, "demo/book_flight.html", {"response": passenger_name_record})
 
@@ -826,7 +1004,9 @@ def book_flight(request):
                             destination,
                             departure_date,
                             return_date,
-                            passenger_name_record
+                            passenger_name_record,
+                            travel_class,
+                            approved_flight
                         )
 
                         # Render the success page
@@ -838,7 +1018,7 @@ def book_flight(request):
                     messages.success(
                         request, f"Flight Booked {user.username}. Please check your mails.")
                     send_flight_email_2(user, origin, destination, departure_date,
-                                        return_date)
+                                        return_date, travel_class, approved_flight)
                     return render(request, "demo/success_page.html", {"user": user})
 
         else:
@@ -853,7 +1033,9 @@ def book_flight(request):
                 departure_date=departure_date,
                 return_date=return_date,
                 passenger_count=passenger_count,
-                price=price_in_local_currency
+                travel_class=travel_class,
+                price=price_in_local_currency,
+                flight_request=flight_request
             )
 
     except requests.exceptions.HTTPError as http_err:
@@ -876,7 +1058,8 @@ def origin_airport_search(request):
                     keyword=term, subType=Location.ANY
                 ).data
             except Exception as error:
-                logger.warning(f"Amadeus origin autocomplete unavailable, using local airports: {error}")
+                logger.warning(
+                    f"Amadeus origin autocomplete unavailable, using local airports: {error}")
                 data = []
     result = get_city_airport_search_result(data, term)
     return HttpResponse(result, content_type="application/json")
@@ -892,7 +1075,8 @@ def destination_airport_search(request):
                     keyword=term, subType=Location.ANY
                 ).data
             except Exception as error:
-                logger.warning(f"Amadeus destination autocomplete unavailable, using local airports: {error}")
+                logger.warning(
+                    f"Amadeus destination autocomplete unavailable, using local airports: {error}")
                 data = []
     result = get_city_airport_search_result(data, term)
     return HttpResponse(result, content_type="application/json")
@@ -913,11 +1097,10 @@ def get_city_airport_list(data):
     return result
 
 
-# ==========   ADMIN ============== >e
-# Admin Registration View
-def thrive_admin_register(request):
+# ==========   TRAVEL AGENCY ============== >
+def travel_agency_register(request):
     if request.method == 'POST':
-        form = ThriveAdminUserCreationForm(request.POST)
+        form = TravelAgencyUserCreationForm(request.POST)
         if form.is_valid():
             # Save the user but don't commit yet
             user = form.save(commit=False)
@@ -926,100 +1109,261 @@ def thrive_admin_register(request):
 
             # Create a Profile for the user
             Profile.objects.create(user=user)
+            approval_status = form.approval_code_is_valid()
 
-            # Create the Admin profile with approval_status = False (unapproved)
-            ThriveAdmin.objects.create(
-                thrive_admin=user,
+            # Create the Travel Agency profile. A valid approval code approves it immediately.
+            TravelAgency.objects.create(
+                admin=user,
                 first_name=user.first_name,
                 last_name=user.last_name,
                 phone=user.phone,  # Assuming phone is captured in the form
-                approval_status=False  # New admin is unapproved initially
+                company_code=form.cleaned_data.get('company_code') or None,
+                approval_status=approval_status,
             )
 
-            # Log the user in after registration
-            auth_login(request, user)
-
-            # Notify the user that they are awaiting approval
-            messages.success(
-                request, 'Admin registration successful. Your account is awaiting approval from an existing admin.')
-
-            # Redirect to a "waiting for approval" page instead of admin dashboard
-            # You need to create this page
-            return redirect('thrive_admin_login')
+            if approval_status:
+                auth_login(request, user)
+                messages.success(
+                    request,
+                    'Travel Agency registration successful. Your approval code was accepted.'
+                )
+                return redirect('travel_agency_approval_view')
+            else:
+                messages.success(
+                    request,
+                    'Travel Agency registration successful. Your account is awaiting approval from an approved Travel Agency.'
+                )
+                return redirect('travel_agency_login')
         else:
             messages.error(
                 request, 'There was an error in the form. Please correct the errors.')
     else:
-        form = ThriveAdminUserCreationForm()
+        form = TravelAgencyUserCreationForm()
 
-    return render(request, 'demo/thrive_admin/admin_register.html', {'form': form})
+    return render(request, 'demo/travel_agency/admin_register.html', {'form': form})
 
 
-def thrive_admin_login(request):
+@never_cache
+def travel_agency_login(request):
     if request.method == 'POST':
-        form = AuthenticationForm(data=request.POST)
+        form = TravelAgencyAuthenticationForm(request, data=request.POST)
         if form.is_valid():
-            username = form.cleaned_data.get('username')
-            password = form.cleaned_data.get('password')
-            user = authenticate(username=username, password=password)
+            user = form.get_user()
 
             if user is not None:
                 try:
-                    # Check if the user has an admin profile
-                    admin_profile = ThriveAdmin.objects.get(admin=user)
+                    # Check if the user has a Travel Agency profile
+                    agency_profile = TravelAgency.objects.get(admin=user)
+                    company_code = form.cleaned_data.get('company_code')
 
-                    if not admin_profile.approval_status:
+                    if normalize_company_code(agency_profile.company_code) != company_code:
+                        messages.error(request, 'Invalid company code.')
+                        return render(request, 'demo/travel_agency/admin_login.html', {'form': form})
+
+                    if not agency_profile.approval_status:
                         messages.error(
-                            request, 'Your account is awaiting approval from an existing admin.')
-                        return render(request, 'demo/thrive_admin/admin_login.html', {'form': form})
+                            request, 'Your account is awaiting approval from an approved Travel Agency.')
+                        return render(request, 'demo/travel_agency/admin_login.html', {'form': form})
 
-                    # If approved, log in the admin
+                    # If approved, log in the Travel Agency user
                     auth_login(request, user)
-                    # messages.success(request, 'Thrive Admin login successful.')
-                    return redirect('thrive_admin_approval_view')
+                    return redirect('travel_agency_approval_view')
 
-                except ThriveAdmin.DoesNotExist:
+                except TravelAgency.DoesNotExist:
                     messages.error(request, 'You do not have admin access.')
             else:
                 messages.error(request, 'Invalid username or password.')
     else:
-        form = AuthenticationForm()
+        form = TravelAgencyAuthenticationForm()
 
-    return render(request, 'demo/thrive_admin/admin_login.html', {'form': form})
+    return render(request, 'demo/travel_agency/admin_login.html', {'form': form})
 
 
-def thrive_admin_approval_view(request):
-    # Fetch all pending admins where approval_status is False
-    pending_admins = ThriveAdmin.objects.filter(approval_status=False)
+@travel_agency_required
+def travel_agency_organizations(request):
+    agency_profile = get_object_or_404(
+        TravelAgency, admin=request.user, approval_status=True)
+
+    if request.method == 'POST':
+        organization_id = request.POST.get('organization_id')
+        action = request.POST.get('action')
+
+        if action == 'toggle' and organization_id:
+            organization = get_object_or_404(
+                Organization,
+                id=organization_id,
+                travel_agency=agency_profile,
+            )
+            organization.active = not organization.active
+            organization.save(update_fields=['active'])
+            messages.success(request, f'{organization.name} has been updated.')
+            return redirect('travel_agency_organizations')
+
+        if action == 'claim' and organization_id:
+            organization = get_object_or_404(
+                Organization,
+                id=organization_id,
+                travel_agency__isnull=True,
+            )
+            organization.travel_agency = agency_profile
+            organization.save(update_fields=['travel_agency'])
+            Flight_model.objects.filter(
+                organization=organization,
+                travel_agency__isnull=True,
+            ).update(travel_agency=agency_profile)
+            messages.success(
+                request, f'{organization.name} is now managed by your agency.')
+            return redirect('travel_agency_organizations')
+
+        if action == 'update' and organization_id:
+            organization = get_object_or_404(
+                Organization,
+                id=organization_id,
+                travel_agency=agency_profile,
+            )
+            form = TravelAgencyOrganizationForm(
+                request.POST, instance=organization)
+            if form.is_valid():
+                form.save()
+                messages.success(
+                    request, f'{organization.name} has been updated.')
+                return redirect('travel_agency_organizations')
+            messages.error(request, 'Please correct the organization details.')
+        else:
+            form = TravelAgencyOrganizationForm(request.POST)
+            if form.is_valid():
+                organization = form.save(commit=False)
+                organization.travel_agency = agency_profile
+                organization.save()
+                messages.success(
+                    request, f'{organization.name} has been added.')
+                return redirect('travel_agency_organizations')
+            messages.error(request, 'Please correct the organization details.')
+    else:
+        form = TravelAgencyOrganizationForm()
+
+    organizations = Organization.objects.filter(
+        travel_agency=agency_profile,
+    ).order_by('name')
+    available_organizations = Organization.objects.filter(
+        travel_agency__isnull=True,
+    ).order_by('name')
+
+    return render(
+        request,
+        'demo/travel_agency/organizations.html',
+        {
+            'form': form,
+            'organizations': organizations,
+            'available_organizations': available_organizations,
+            'agency_profile': agency_profile,
+        },
+    )
+
+
+@travel_agency_required
+def travel_agency_approval_view(request):
+    # Travel Agency users approve organization admin accounts.
+    agency_profile = get_object_or_404(
+        TravelAgency, admin=request.user, approval_status=True)
+    pending_admins = Admin.objects.select_related(
+        'admin',
+        'organization',
+    ).filter(
+        approval_status=False,
+    ).filter(
+        Q(organization__travel_agency=agency_profile)
+        | Q(organization__travel_agency__isnull=True)
+        | Q(organization__isnull=True)
+    )
 
     if request.method == 'POST':
         admin_id = request.POST.get('admin_id')
         action = request.POST.get('action')
 
-        # Fetch the admin by ID
-        thrive_admin = get_object_or_404(ThriveAdmin, id=admin_id)
+        admin = get_object_or_404(pending_admins, id=admin_id)
 
         if action == 'approve':
-            thrive_admin.approval_status = True  # Approve the admin
-            thrive_admin.save()
+            admin.approval_status = True
+            admin.save()
+            if admin.organization_id and admin.organization.travel_agency_id != agency_profile.id:
+                admin.organization.travel_agency = agency_profile
+                admin.organization.save(update_fields=['travel_agency'])
+                Flight_model.objects.filter(
+                    organization=admin.organization,
+                    travel_agency__isnull=True,
+                ).update(travel_agency=agency_profile)
             messages.success(
-                request, f'{thrive_admin.admin.username} has been approved as an admin.')
+                request, f'{admin.admin.username} has been approved as an organization admin.')
         elif action == 'disapprove':
-            thrive_admin.approval_status = False  # Disapprove the admin
-            thrive_admin.save()
+            admin.approval_status = False
+            admin.save()
             messages.error(
-                request, f'{thrive_admin.admin.username} has been disapproved.')
+                request, f'{admin.admin.username} has been disapproved.')
 
-        return redirect('thrive_admin_approval_view')
+        return redirect('travel_agency_approval_view')
 
-    return render(request, 'demo/thrive_admin/admin_approval.html', {'pending_admins': pending_admins})
+    return render(request, 'demo/travel_agency/admin_approval.html', {'pending_admins': pending_admins})
 
 
-# Admin Report
-def thrive_report(request):
-    flights = Flight_model.objects.all()
-    staff_members = Staff.objects.all()
-    admins = Admin.objects.all()
+@travel_agency_required
+def travel_agency_peer_approval_view(request):
+    agency_profile = get_object_or_404(
+        TravelAgency, admin=request.user, approval_status=True)
+    pending_agencies = TravelAgency.objects.select_related('admin').filter(
+        approval_status=False
+    ).exclude(id=agency_profile.id)
+
+    if request.method == 'POST':
+        agency_id = request.POST.get('agency_id')
+        action = request.POST.get('action')
+        pending_agency = get_object_or_404(pending_agencies, id=agency_id)
+
+        if action == 'approve':
+            pending_agency.approval_status = True
+            pending_agency.save(update_fields=['approval_status'])
+            messages.success(
+                request,
+                f'{pending_agency.admin.username} has been approved as a Travel Agency.'
+            )
+        elif action == 'disapprove':
+            pending_agency.approval_status = False
+            pending_agency.save(update_fields=['approval_status'])
+            messages.error(
+                request,
+                f'{pending_agency.admin.username} remains unapproved.'
+            )
+
+        return redirect('travel_agency_peer_approval_view')
+
+    return render(
+        request,
+        'demo/travel_agency/agency_approval.html',
+        {'pending_agencies': pending_agencies},
+    )
+
+
+# Travel Agency Report
+@travel_agency_required
+def travel_agency_report(request):
+    agency_profile = get_object_or_404(
+        TravelAgency, admin=request.user, approval_status=True)
+    managed_organizations = Organization.objects.filter(
+        travel_agency=agency_profile)
+    flights = Flight_model.objects.select_related(
+        'user',
+        'organization',
+        'travel_agency',
+    ).filter(
+        Q(travel_agency=agency_profile)
+        | Q(travel_agency__isnull=True, organization__travel_agency=agency_profile)
+    )
+    staff_members = Staff.objects.select_related('staff', 'organization').filter(
+        organization__in=managed_organizations
+    )
+    admins = Admin.objects.select_related('admin', 'organization').filter(
+        organization__in=managed_organizations
+    )
 
     # Handle Export to CSV, Excel, or PDF
     if 'export' in request.GET:
@@ -1031,14 +1375,109 @@ def thrive_report(request):
         elif file_format == 'pdf':
             return export_combined_to_pdf(request, flights, staff_members, admins)
 
-    return render(request, 'demo/thrive_admin/report.html', {
+    return render(request, 'demo/travel_agency/report.html', {
         'flights': flights,
         'staff_members': staff_members,
-        'admins': admins
+        'admins': admins,
+        'managed_organizations': managed_organizations,
+        'agency_profile': agency_profile,
     })
 
 
-def send_flight_email(user, origin, destination, departure_date, return_date, passenger_name_record):
+@travel_agency_required
+def travel_agency_approved_flights(request):
+    agency_profile = get_object_or_404(
+        TravelAgency, admin=request.user, approval_status=True)
+    approved_flight_requests = Flight_model.objects.select_related(
+        'user',
+        'organization',
+        'travel_agency',
+        'requested_by_staff__staff',
+        'approved_by_admin__admin',
+    ).filter(
+        Q(travel_agency=agency_profile)
+        | Q(travel_agency__isnull=True, organization__travel_agency=agency_profile),
+        approved=True,
+    ).order_by('-departure_date', '-id')
+
+    return render(request, 'demo/travel_agency/approved_flights.html', {
+        'approved_flights': approved_flight_requests,
+        'agency_profile': agency_profile,
+    })
+
+
+def flight_admin_recipients(flight_request, fallback_roles=None):
+    if flight_request:
+        recipients = flight_request.organization_admin_emails()
+        if recipients:
+            return recipients
+    return role_recipients(fallback_roles or settings.BOOKING_NOTIFICATION_RECIPIENT_ROLES)
+
+
+def flight_requester_recipients(flight_request):
+    if not flight_request:
+        return []
+    return flight_request.requester_emails()
+
+
+def flight_agency_recipients(flight_request):
+    if not flight_request:
+        return []
+    travel_agency = flight_request.mapped_travel_agency()
+    if not travel_agency:
+        return []
+    return Flight_model.unique_emails([travel_agency.admin.email])
+
+
+def flight_approval_recipients(flight_request):
+    recipients = []
+    recipients.extend(flight_requester_recipients(flight_request))
+    recipients.extend(flight_agency_recipients(flight_request))
+    return Flight_model.unique_emails(recipients)
+
+
+def flight_booking_recipients(flight_request):
+    recipients = []
+    if flight_request:
+        recipients.extend(flight_request.organization_admin_emails())
+        recipients.extend(flight_agency_recipients(flight_request))
+
+    if not recipients:
+        recipients.extend(role_recipients(
+            settings.BOOKING_NOTIFICATION_RECIPIENT_ROLES))
+
+    return Flight_model.unique_emails(recipients)
+
+
+def flight_email_context(flight_request):
+    return {
+        'user': flight_request.requesting_user(),
+        'origin': flight_request.origin,
+        'destination': flight_request.destination,
+        'departure_date': flight_request.departure_date,
+        'return_date': flight_request.return_date,
+        'passenger_count': flight_request.passenger_count,
+        'travel_class': flight_request.travel_class,
+        'price': flight_request.price,
+        'organization': flight_request.organization,
+        'travel_agency': flight_request.mapped_travel_agency(),
+    }
+
+
+def send_flight_approval_email(flight_request):
+    recipients = flight_approval_recipients(flight_request)
+    if not recipients:
+        return
+
+    send_html_email(
+        'Your Flight Booking Has Been Approved',
+        'demo/email/flight_approval_email.html',
+        flight_email_context(flight_request),
+        recipients,
+    )
+
+
+def send_flight_email(user, origin, destination, departure_date, return_date, passenger_name_record, travel_class=None, flight_request=None):
     # Get user profile details
     first_name = user.first_name
     last_name = user.last_name
@@ -1047,7 +1486,7 @@ def send_flight_email(user, origin, destination, departure_date, return_date, pa
 
     # Prepare the email subject and message
     subject = 'Flight Order From Online Booking Tool'
-    message = render_to_string('demo/email/flight_booking_email.html', {
+    context = {
         'first_name': first_name,
         'last_name': last_name,
         'email': email,
@@ -1056,27 +1495,27 @@ def send_flight_email(user, origin, destination, departure_date, return_date, pa
         'destination': destination,
         'departure_date': departure_date,
         'return_date': return_date,
+        'travel_class': travel_class,
         'response': passenger_name_record
-    })
+    }
+    if flight_request:
+        context.update({
+            'passenger_count': flight_request.passenger_count,
+            'price': flight_request.price,
+            'organization': flight_request.organization,
+            'travel_agency': flight_request.mapped_travel_agency(),
+        })
 
-    # Create an EmailMessage instance
-    email = EmailMessage(
-        subject=subject,
-        body=message,
-        from_email=settings.EMAIL_HOST_USER,
-        to=['david.edet@thrivenig.com'],  # Send to the user's email
+    send_html_email(
+        subject,
+        'demo/email/flight_booking_email.html',
+        context,
+        flight_booking_recipients(flight_request),
     )
-
-    # Optionally set headers or other properties
-    email.content_subtype = 'html'  # If the message is HTML
-    # email.attach('filename.txt', 'file content', 'text/plain')  # To attach files
-
-    # Send email
-    email.send(fail_silently=False)
     print("Email sent successfully!")
 
 
-def send_flight_email_2(user, origin, destination, departure_date, return_date):
+def send_flight_email_2(user, origin, destination, departure_date, return_date, travel_class=None, flight_request=None):
     # Get user profile details
     first_name = user.first_name
     last_name = user.last_name
@@ -1085,7 +1524,7 @@ def send_flight_email_2(user, origin, destination, departure_date, return_date):
 
     # Prepare the email subject and message
     subject = 'Flight Order From Online Booking Tool'
-    message = render_to_string('demo/email/flight_booking_email.html', {
+    context = {
         'first_name': first_name,
         'last_name': last_name,
         'email': email,
@@ -1093,55 +1532,56 @@ def send_flight_email_2(user, origin, destination, departure_date, return_date):
         'origin': origin,
         'destination': destination,
         'departure_date': departure_date,
-        'return_date': return_date
+        'return_date': return_date,
+        'travel_class': travel_class
 
-    })
+    }
+    if flight_request:
+        context.update({
+            'passenger_count': flight_request.passenger_count,
+            'price': flight_request.price,
+            'organization': flight_request.organization,
+            'travel_agency': flight_request.mapped_travel_agency(),
+        })
 
-    # Create an EmailMessage instance
-    email = EmailMessage(
-        subject=subject,
-        body=message,
-        from_email=settings.EMAIL_HOST_USER,
-        to=['david.edet@thrivenig.com'],  # Send to the user's email
+    send_html_email(
+        subject,
+        'demo/email/flight_booking_email.html',
+        context,
+        flight_booking_recipients(flight_request),
     )
-
-    # Optionally set headers or other properties
-    email.content_subtype = 'html'  # If the message is HTML
-    # email.attach('filename.txt', 'file content', 'text/plain')  # To attach files
-
-    # Send email
-    email.send(fail_silently=False)
     print("Email sent successfully!")
 
 
-def send_flight_pending_email(user, origin, destination, departure_date, return_date, passenger_count, price):
+def send_flight_pending_email(user, origin, destination, departure_date, return_date, passenger_count, travel_class, price, flight_request=None):
     subject = "Flight Approval Pending"
-    from_email = settings.EMAIL_HOST_USER
-    to_email = ['david.edet@thrivenig.com']
 
-    # Render the HTML template and strip it to plain text
-    html_content = render_to_string("demo/email/flight_pending_email.html", {
+    context = {
         "user": user,
         "origin": origin,
         "destination": destination,
         "departure_date": departure_date,
         "return_date": return_date,
         "passenger_count": passenger_count,
-        "price": price
-    })
-    text_content = strip_tags(html_content)
+        "travel_class": travel_class,
+        "price": price,
+        "organization": flight_request.organization if flight_request else None,
+        "travel_agency": flight_request.mapped_travel_agency() if flight_request else None,
+    }
 
-    # Create the email object
-    email = EmailMultiAlternatives(subject, text_content, from_email, to_email)
-    email.attach_alternative(html_content, "text/html")
-
-    # Send the email
-    email.send(fail_silently=False)
+    send_html_email(
+        subject,
+        "demo/email/flight_pending_email.html",
+        context,
+        flight_admin_recipients(
+            flight_request,
+            settings.FLIGHT_APPROVAL_REQUEST_RECIPIENT_ROLES,
+        ),
+    )
     print("Email sent successfully!")
 
 
 # ===========  HOTEL ===============>
-
 
 
 def hotel(request):
@@ -1184,9 +1624,11 @@ def hotel(request):
                     )
                     raw_hotels = list(search_hotels.data)
             except Exception as error:
-                logger.warning(f"Amadeus hotel search unavailable, using local hotels: {error}")
+                logger.warning(
+                    f"Amadeus hotel search unavailable, using local hotels: {error}")
 
-        minimum_results = getattr(settings, 'MIN_HOTEL_RESULTS', LOCAL_HOTEL_RESULTS_TARGET)
+        minimum_results = getattr(
+            settings, 'MIN_HOTEL_RESULTS', LOCAL_HOTEL_RESULTS_TARGET)
         if len(raw_hotels) < minimum_results:
             had_live_hotels = bool(raw_hotels)
             local_hotels = local_hotel_search(
@@ -1196,11 +1638,14 @@ def hotel(request):
                 guest_count=guest_count,
                 max_results=minimum_results,
             )
-            raw_hotels.extend(local_hotels[:max(minimum_results - len(raw_hotels), 0)])
+            raw_hotels.extend(
+                local_hotels[:max(minimum_results - len(raw_hotels), 0)])
             if local_hotels and not had_live_hotels:
-                messages.info(request, "Showing locally priced hotels while live hotel inventory is unavailable.")
+                messages.info(
+                    request, "Showing locally priced hotels while live hotel inventory is unavailable.")
             elif local_hotels:
-                messages.info(request, "Showing additional local hotel options for this city.")
+                messages.info(
+                    request, "Showing additional local hotel options for this city.")
 
         hotel_offers = []
         hotel_results = []
@@ -1227,7 +1672,8 @@ def rooms_per_hotel(request, hotel, departureDate, returnDate):
     try:
         guest_count = request.session.get('guest_count', 1)
         if is_local_hotel_id(hotel):
-            rooms = local_room_search(hotel, departureDate, returnDate, guest_count)
+            rooms = local_room_search(
+                hotel, departureDate, returnDate, guest_count)
         else:
             # Search for rooms in a given hotel
             rooms = amadeus.shopping.hotel_offers_search.get(hotelIds=hotel,
@@ -1239,39 +1685,17 @@ def rooms_per_hotel(request, hotel, departureDate, returnDate):
                                                                    'name': rooms[0]['hotel']['name'],
                                                                    'departureDate': departureDate,
                                                                    'returnDate': returnDate,
-                                                                    })
+                                                                   })
     except (TypeError, AttributeError, ResponseError, KeyError, IndexError, ValueError) as error:
         messages.add_message(request, messages.ERROR, error)
         return render(request, 'demo/hotel/rooms_per_hotel.html', {})
 
 
-# def book_hotel(request, offer_id):
-#     try:
-#         # Confirm availability of a given offer
-#         offer_availability = amadeus.shopping.hotel_offer_search(
-#             offer_id).get()
-#         if offer_availability.status_code == 200:
-#             guests = [{'id': 1, 'name': {'title': 'MR', 'firstName': 'BOB', 'lastName': 'SMITH'},
-#                        'contact': {'phone': '+33679278416', 'email': 'bob.smith@email.com'}}]
-
-#             payments = {'id': 1, 'method': 'creditCard',
-#                         'card': {'vendorCode': 'VI', 'cardNumber': '4151289722471370', 'expiryDate': '2027-08'}}
-#             booking = amadeus.booking.hotel_bookings.post(
-#                 offer_id, guests, payments).data
-#         else:
-#             return render(request, 'demo/hotel/booking.html', {'response': 'The room is not available'})
-#     except ResponseError as error:
-#         messages.add_message(request, messages.ERROR, error.response.body)
-#         return render(request, 'demo/hotel/booking.html', {})
-#     return render(request, 'demo/hotel/booking.html', {'id': booking[0]['id'],
-#                                                        'providerConfirmationId': booking[0]['providerConfirmationId']
-#                                                        })
-
-
 def send_hotel_booking_email(user, hotel_details, booking_details):
     subject = "Hotel Booking Confirmation from Online Booking Tool"
     from_email = settings.EMAIL_HOST_USER
-    to_email = ['david.edet@thrivenig.com']  # Replace with actual email
+    to_email = role_recipients(
+        settings.HOTEL_BOOKING_NOTIFICATION_RECIPIENT_ROLES)
 
     # Render the HTML template and strip it to plain text
     html_content = render_to_string("demo/email/hotel_booking_email.html", {
@@ -1321,7 +1745,6 @@ def book_hotel(request, offer_id):
         return render(request, "demo/success_page.html", hotel_booking_success_context())
 
 
-
 def city_search(request):
     data = []
     term = request.GET.get('term', None)
@@ -1336,12 +1759,11 @@ def city_search(request):
                 data = amadeus.reference_data.locations.get(keyword=term,
                                                             subType=Location.ANY).data
             except Exception as error:
-                logger.warning(f"Amadeus city autocomplete unavailable, using local hotel cities: {error}")
+                logger.warning(
+                    f"Amadeus city autocomplete unavailable, using local hotel cities: {error}")
                 data = []
     result = get_hotel_city_search_result(data, term)
     return HttpResponse(result, content_type='application/json')
-
-
 
 
 def get_city_list(data):

@@ -306,6 +306,7 @@
   .card-img-top { height: 220px; object-fit: cover; border-radius: 8px 8px 0 0; }
   .card .card-body { background: linear-gradient(180deg, rgba(255,255,255,0.9), #fff); }
     </style>
+    <link rel="stylesheet" type="text/css" href="{% static 'demo/css/responsive_nav.css' %}" />
     <script>
   function checkAuth(event) {
     // Check if user is authenticated
@@ -354,7 +355,10 @@
       <button class="navbar-toggler "
               type="button"
               data-toggle="collapse"
-              data-target="#navbarNav">
+              data-target="#navbarNav"
+              aria-controls="navbarNav"
+              aria-expanded="false"
+              aria-label="Toggle navigation">
         <span class="navbar-toggler-icon">
           <i class="fas fa-bars text-dark"> </i>
         </span>
@@ -866,5 +870,6 @@
 
       });
     </script>
+    <script src="{% static 'demo/js/responsive_nav.js' %}"></script>
   </body>
 </html>

@@ -1,0 +1,20 @@
+{% extends 'demo/auth/base.html' %}
+
+{% block title %}Travel agency registration{% endblock %}
+{% block role_class %}auth-role-agency{% endblock %}
+{% block eyebrow %}Travel agency registration{% endblock %}
+{% block heading %}Create your agency account{% endblock %}
+{% block intro %}Enter an approval code if you have one, and choose a unique company code for future access.{% endblock %}
+
+{% block content %}
+    <form class="auth-form" method="post">
+        {% csrf_token %}
+        <div class="auth-form-grid">
+            {% include 'demo/auth/form_fields.html' %}
+        </div>
+        <button class="auth-submit" type="submit">Create travel agency account</button>
+    </form>
+    <p class="auth-card-footer">
+        Already registered? <a href="{% url 'travel_agency_login' %}">Sign in as travel agency</a>
+    </p>
+{% endblock %}

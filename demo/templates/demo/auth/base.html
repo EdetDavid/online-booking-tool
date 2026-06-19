@@ -1,0 +1,72 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="Secure access to the Online Booking Tool">
+    <title>{% block title %}Account access{% endblock %} | Online Booking Tool</title>
+    <link rel="icon" href="{% static 'images/online_booking_tool.png' %}" type="image/x-icon">
+    <link rel="stylesheet" href="{% static 'demo/css/auth.css' %}">
+</head>
+<body class="auth-page {% block role_class %}auth-role-staff{% endblock %}">
+    {% include 'demo/includes/toasts.html' %}
+    <main class="auth-shell">
+        <aside class="auth-brand-panel">
+            <a class="auth-brand" href="{% url 'home' %}">
+                <img src="{% static 'images/online_booking_tool.png' %}" alt="">
+                <span>Online Booking Tool</span>
+            </a>
+
+            <div class="auth-brand-copy">
+                <p class="auth-brand-kicker">Business travel, organized</p>
+                <h1>One workspace for every step of the journey.</h1>
+                <p>
+                    Search, request, approve, and manage corporate travel with
+                    the right access for every member of your team.
+                </p>
+                <ul class="auth-benefits">
+                    <li>Role-based access for secure collaboration</li>
+                    <li>Clear approval workflows from request to booking</li>
+                    <li>Centralized flight and hotel reporting</li>
+                </ul>
+            </div>
+
+            <p class="auth-brand-footer">Secure access for staff, administrators, and travel agencies.</p>
+        </aside>
+
+        <section class="auth-main">
+            <div class="auth-main-inner">
+                <a class="auth-back-link" href="{% url 'home' %}" aria-label="Return to homepage">
+                    <span aria-hidden="true">←</span> Back to homepage
+                </a>
+
+                <div class="auth-card">
+                    <header class="auth-card-header">
+                        <span class="auth-eyebrow">{% block eyebrow %}Secure portal{% endblock %}</span>
+                        <h2>{% block heading %}Welcome{% endblock %}</h2>
+                        <p>{% block intro %}Enter your details to continue.{% endblock %}</p>
+                    </header>
+
+                    <nav class="auth-role-switcher" aria-label="Choose account type">
+                        <a
+                            href="{% url 'login' %}"
+                            {% if request.resolver_match.url_name == 'login' or request.resolver_match.url_name == 'register' %}class="active" aria-current="page"{% endif %}
+                        >Staff</a>
+                        <a
+                            href="{% url 'admin_login' %}"
+                            {% if request.resolver_match.url_name == 'admin_login' or request.resolver_match.url_name == 'admin_register' %}class="active" aria-current="page"{% endif %}
+                        >Administrator</a>
+                        <a
+                            href="{% url 'travel_agency_login' %}"
+                            {% if request.resolver_match.url_name == 'travel_agency_login' or request.resolver_match.url_name == 'travel_agency_register' %}class="active" aria-current="page"{% endif %}
+                        >Travel agency</a>
+                    </nav>
+
+                    {% block content %}{% endblock %}
+                </div>
+            </div>
+        </section>
+    </main>
+</body>
+</html>

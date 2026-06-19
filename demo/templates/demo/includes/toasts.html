@@ -1,0 +1,95 @@
+{% if messages %}
+    <div class="toast-stack" aria-live="polite" aria-atomic="true">
+        {% for message in messages %}
+            <div class="app-toast toast-{{ message.tags|default:'info' }}" role="status">
+                <span>{{ message }}</span>
+                <button type="button" class="toast-close" aria-label="Close">&times;</button>
+            </div>
+        {% endfor %}
+    </div>
+{% endif %}
+
+<style>
+    .toast-stack {
+        position: fixed;
+        top: 20px;
+        right: 20px;
+        z-index: 9999;
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
+        width: min(360px, calc(100vw - 32px));
+    }
+
+    .app-toast {
+        display: flex;
+        align-items: flex-start;
+        justify-content: space-between;
+        gap: 12px;
+        padding: 14px 16px;
+        border-radius: 8px;
+        color: #1f2933;
+        background: #ffffff;
+        border-left: 4px solid #0d6efd;
+        box-shadow: 0 12px 30px rgba(15, 23, 42, 0.18);
+        font-size: 14px;
+        line-height: 1.4;
+        animation: toast-in 180ms ease-out;
+    }
+
+    .toast-error {
+        border-left-color: #dc3545;
+    }
+
+    .toast-success {
+        border-left-color: #198754;
+    }
+
+    .toast-warning {
+        border-left-color: #ffc107;
+    }
+
+    .toast-info {
+        border-left-color: #0dcaf0;
+    }
+
+    .toast-close {
+        appearance: none;
+        border: 0;
+        background: transparent;
+        color: #52616f;
+        cursor: pointer;
+        font-size: 20px;
+        line-height: 1;
+        padding: 0;
+    }
+
+    @keyframes toast-in {
+        from {
+            opacity: 0;
+            transform: translateY(-8px);
+        }
+        to {
+            opacity: 1;
+            transform: translateY(0);
+        }
+    }
+</style>
+
+<script>
+    document.addEventListener('DOMContentLoaded', function () {
+        document.querySelectorAll('.app-toast').forEach(function (toast) {
+            var close = toast.querySelector('.toast-close');
+            if (close) {
+                close.addEventListener('click', function () {
+                    toast.remove();
+                });
+            }
+            setTimeout(function () {
+                if (toast.parentNode) {
+                    toast.remove();
+                }
+            }, 6000);
+        });
+    });
+</script>

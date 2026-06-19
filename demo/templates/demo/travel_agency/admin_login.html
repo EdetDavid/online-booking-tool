@@ -1,0 +1,18 @@
+{% extends 'demo/auth/base.html' %}
+
+{% block title %}Travel agency login{% endblock %}
+{% block role_class %}auth-role-agency{% endblock %}
+{% block eyebrow %}Travel agency portal{% endblock %}
+{% block heading %}Welcome back, travel partner{% endblock %}
+{% block intro %}Sign in with your account and company code to manage clients, approvals, and bookings.{% endblock %}
+
+{% block content %}
+    <form class="auth-form" method="post">
+        {% csrf_token %}
+        {% include 'demo/auth/form_fields.html' %}
+        <button class="auth-submit" type="submit">Sign in as travel agency</button>
+    </form>
+    <p class="auth-card-footer">
+        New travel partner? <a href="{% url 'travel_agency_register' %}">Create a travel agency account</a>
+    </p>
+{% endblock %}

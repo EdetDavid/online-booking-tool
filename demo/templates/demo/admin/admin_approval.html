@@ -206,6 +206,7 @@
                             <th>Username</th>
                             <th>First Name</th>
                             <th>Last Name</th>
+                            <th>Organization</th>
                             <th>Email</th>
                             <th>Phone</th>
                             <th>Actions</th>
@@ -228,6 +229,7 @@
                                 <td data-label="Username">{{ admin.admin.username }}</td>
                                 <td data-label="First Name">{{ admin.first_name }}</td>
                                 <td data-label="Last Name">{{ admin.last_name }}</td>
+                                <td data-label="Organization">{{ admin.organization|default:"Unassigned" }}</td>
                                 <td data-label="Email">{{ admin.admin.email }}</td>
                                 <td data-label="Phone">{{ admin.phone }}</td>
                                 <td data-label="Actions">

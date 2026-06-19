@@ -1,0 +1,27 @@
+{% if form.non_field_errors %}
+    <div class="auth-alert" role="alert">
+        {{ form.non_field_errors }}
+    </div>
+{% endif %}
+
+{% for hidden_field in form.hidden_fields %}
+    {{ hidden_field }}
+{% endfor %}
+
+{% for field in form.visible_fields %}
+    <div class="auth-field{% if field.errors %} auth-field--invalid{% endif %}">
+        <label for="{{ field.id_for_label }}">
+            {{ field.label }}
+            {% if field.field.required %}<span class="auth-required" aria-hidden="true">*</span>{% endif %}
+        </label>
+        {{ field }}
+        {% if field.help_text %}
+            <div class="auth-help" id="{{ field.auto_id }}_help">{{ field.help_text|safe }}</div>
+        {% endif %}
+        {% if field.errors %}
+            <ul class="auth-errors" id="{{ field.auto_id }}_errors">
+                {% for error in field.errors %}<li>{{ error }}</li>{% endfor %}
+            </ul>
+        {% endif %}
+    </div>
+{% endfor %}

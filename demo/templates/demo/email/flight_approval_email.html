@@ -54,11 +54,16 @@
     </head>
     <body>
         <div class="email-container">
-            <h2>Your Flight Booking Has Been Approved!</h2>
-            <p>Dear {{ user.first_name }},  {{ user.last_name }} </p>
+            <h2>Flight Booking Approved</h2>
+            <p>Dear {{ user.first_name }} {{ user.last_name }},</p>
             <p>
                 We are pleased to inform you that your flight booking from <strong>{{ origin }}</strong> to <strong>{{ destination }}</strong> on <strong>{{ departure_date }}</strong> has been successfully approved!
             </p>
+            {% if travel_agency %}
+                <p>
+                    The request has also been shared with <strong>{{ travel_agency.admin.get_full_name|default:travel_agency.admin.username }}</strong> for agency handling.
+                </p>
+            {% endif %}
             <div class="flight-details">
                 <p>
                     <strong>Flight Details:</strong>
@@ -81,14 +86,29 @@
                 <p>
                     <strong>Travel Class:</strong> {{ travel_class }}
                 </p>
+                {% if organization %}
+                    <p>
+                        <strong>Organization:</strong> {{ organization.name }}
+                    </p>
+                {% endif %}
+                {% if travel_agency %}
+                    <p>
+                        <strong>Travel Agency:</strong> {{ travel_agency.admin.get_full_name|default:travel_agency.admin.username }}
+                    </p>
+                {% endif %}
+                {% if price %}
+                    <p>
+                        <strong>Price:</strong> {{ price }}
+                    </p>
+                {% endif %}
             </div>
-            <p>Thank you for choosing us for your travel needs! We wish you a pleasant journey.</p>
+            <p>Thank you for choosing us for your travel needs. We wish you a pleasant journey.</p>
             <div class="footer">
                 <p>Best regards,</p>
                 <p>The Flight Booking Team</p>
                 <div class="contact-info">
                     <p>
-                        For any inquiries, please contact us at <a href="mailto:support@your-booking-site.com">support@your-booking-site.com</a>
+                        For any inquiries, please contact your organization admin or travel agency.
                     </p>
                 </div>
             </div>

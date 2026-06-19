@@ -1,4 +1,4 @@
-{% extends 'demo/thrive_admin/base.html' %}
+{% extends 'demo/travel_agency/base.html' %}
 {% load static %}
 
 {% block content %}
@@ -155,6 +155,8 @@
                 <tr>
                     <th>First Name</th>
                     <th>Last Name</th>
+                    <th>Organization</th>
+                    <th>Agent</th>
                     <th>Origin</th>
                     <th>Destination</th>
                     <th>Departure Date</th>
@@ -168,6 +170,8 @@
                     <tr>
                         <td data-label="First Name">{{ flight.user.first_name }}</td>
                         <td data-label="Last Name">{{ flight.user.last_name }}</td>
+                        <td data-label="Organization">{{ flight.organization|default:"Unassigned" }}</td>
+                        <td data-label="Agent">{{ flight.mapped_travel_agency|default:"Unassigned" }}</td>
                         <td data-label="Origin">{{ flight.origin }}</td>
                         <td data-label="Destination">{{ flight.destination }}</td>
                         <td data-label="Departure Date">{{ flight.departure_date }}</td>
@@ -183,7 +187,7 @@
                     </tr>
                 {% empty %}
                 <tr>
-                    <td colspan="8">No flights to report.</td>
+                    <td colspan="10">No flights to report.</td>
                 </tr>
                 {% endfor %}
             </tbody>
@@ -200,6 +204,7 @@
                 <tr>
                     <th>First Name</th>
                     <th>Last Name</th>
+                    <th>Organization</th>
                     <th>Email</th>
                     <th>Phone</th>
                 </tr>
@@ -209,12 +214,13 @@
                     <tr>
                         <td data-label="First Name">{{ staff.first_name }}</td>
                         <td data-label="Last Name">{{ staff.last_name }}</td>
+                        <td data-label="Organization">{{ staff.organization|default:"Unassigned" }}</td>
                         <td data-label="Email">{{ staff.staff.email }}</td>
                         <td data-label="Phone">{{ staff.phone }}</td>
                     </tr>
                 {% empty %}
                 <tr>
-                    <td colspan="4">No staff members to report.</td>
+                    <td colspan="5">No staff members to report.</td>
                 </tr>
                 {% endfor %}
             </tbody>
@@ -231,6 +237,7 @@
                 <tr>
                     <th>First Name</th>
                     <th>Last Name</th>
+                    <th>Organization</th>
                     <th>Email</th>
                     <th>Phone</th>
                     <th>Approval Status</th>
@@ -241,6 +248,7 @@
                     <tr>
                         <td data-label="First Name">{{ admin.first_name }}</td>
                         <td data-label="Last Name">{{ admin.last_name }}</td>
+                        <td data-label="Organization">{{ admin.organization|default:"Unassigned" }}</td>
                         <td data-label="Email">{{ admin.admin.email }}</td>
                         <td data-label="Phone">{{ admin.phone }}</td>
                         <td data-label="Approval Status">
@@ -253,7 +261,7 @@
                     </tr>
                 {% empty %}
                 <tr>
-                    <td colspan="5">No admins to report.</td>
+                    <td colspan="6">No admins to report.</td>
                 </tr>
                 {% endfor %}
             </tbody>

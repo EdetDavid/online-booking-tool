@@ -235,13 +235,15 @@
             }
         }
     </style>
+    <link rel="stylesheet" href="{% static 'demo/css/responsive_nav.css' %}">
 </head>
-<body>
+<body class="dashboard-body">
     <div class="main-container">
+        <div class="sidebar-backdrop" aria-hidden="true"></div>
         <!-- Sidebar Section -->
-        <div class="sidebar">
+        <div class="sidebar" id="dashboardSidebar">
             <h2>Staff Dashboard</h2>
-            <a class="my-2 text-decoration-none" href="{% url 'profile' %}" class="{% if request.resolver_match.url_name == 'profile' %}active{% endif %}">
+            <a class="my-2 text-decoration-none {% if request.resolver_match.url_name == 'profile' %}active{% endif %}" href="{% url 'profile' %}">
                 <i class="fas fa-user-circle"></i>Profile
             </a>
             
@@ -263,10 +265,10 @@
                 </div>
             </div>
 
-            <a class="my-2 text-decoration-none" href="{% url 'pending_flights' %}" class="{% if request.resolver_match.url_name == 'pending_flights' %}active{% endif %}">
+            <a class="my-2 text-decoration-none {% if request.resolver_match.url_name == 'pending_flights' %}active{% endif %}" href="{% url 'pending_flights' %}">
                 <i class="fas fa-plane"></i>Pending Flights
             </a>
-            <a class="my-2 text-decoration-none" href="{% url 'approved_flights' %}" class="{% if request.resolver_match.url_name == 'approved_flights' %}active{% endif %}">
+            <a class="my-2 text-decoration-none {% if request.resolver_match.url_name == 'approved_flights' %}active{% endif %}" href="{% url 'approved_flights' %}">
                 <i class="fas fa-plane"></i>Approved Flights
             </a>
         </div>
@@ -274,9 +276,14 @@
         <!-- Main Content Section -->
         <div class="main-content">
             <!-- Sidebar Toggle Button -->
-            <div class="sidebar-toggle" title="Toggle Sidebar">
+            <button type="button"
+                    class="sidebar-toggle"
+                    title="Toggle navigation"
+                    aria-controls="dashboardSidebar"
+                    aria-expanded="false"
+                    aria-label="Toggle navigation">
                 <i class="fas fa-bars"></i>
-            </div>
+            </button>
             <div class="navbar">
                 <h1>Welcome, {{ request.user.username }}</h1>
                 <div class="navbar-right">
@@ -291,48 +298,6 @@
         </div>
     </div>
 
-    <script>
-        const sidebar = document.querySelector('.sidebar');
-        const sidebarToggle = document.querySelector('.sidebar-toggle');
-        const mainContainer = document.querySelector('.main-container');
-
-        // Dropdown functionality
-        document.querySelectorAll('.dropdown-toggle').forEach(dropdownToggle => {
-            dropdownToggle.addEventListener('click', (e) => {
-                e.preventDefault();
-                const dropdown = dropdownToggle.parentElement;
-                dropdown.classList.toggle('active');
-            });
-        });
-
-        sidebarToggle.addEventListener('click', () => {
-            sidebar.classList.toggle('open');
-            mainContainer.classList.toggle('sidebar-closed');
-        });
-
-        // Close sidebar when clicking outside
-        document.addEventListener('click', (event) => {
-            if (!sidebar.contains(event.target) && !sidebarToggle.contains(event.target)) {
-                sidebar.classList.remove('open');
-                mainContainer.classList.add('sidebar-closed');
-            }
-        });
-
-        // Show the toggle button only when the screen width is less than 768px
-        function updateToggleVisibility() {
-            if (window.innerWidth < 768) {
-                sidebarToggle.style.display = 'block';
-                sidebar.classList.remove('open');
-                mainContainer.classList.add('sidebar-closed');
-            } else {
-                sidebarToggle.style.display = 'none';
-                sidebar.classList.remove('open');
-                mainContainer.classList.remove('sidebar-closed');
-            }
-        }
-
-        window.addEventListener('resize', updateToggleVisibility);
-        updateToggleVisibility(); 
-    </script>
+    <script src="{% static 'demo/js/responsive_nav.js' %}"></script>
 </body>
 </html>

@@ -2,12 +2,13 @@ from django.contrib import admin
 from django.contrib.auth.admin import UserAdmin as BaseUserAdmin
 from .models import (
     User,
+    Organization,
     Admin,
     Staff,
     Profile,
     Flight_model,
     PriceIncrement,
-    ThriveAdmin,
+    TravelAgency,
     LocalFlightFare,
 )
 
@@ -46,22 +47,33 @@ class UserAdmin(BaseUserAdmin):
     ordering = ("username",)
 
 
-class ThriveAdminAdmin(admin.ModelAdmin):
+class OrganizationAdmin(admin.ModelAdmin):
+    list_display = ("name", "join_code", "travel_agency", "active", "created_at")
+    search_fields = ("name", "join_code", "travel_agency__admin__username", "travel_agency__admin__email")
+    list_filter = ("active",)
+    raw_id_fields = ("travel_agency",)
+
+
+class TravelAgencyAdmin(admin.ModelAdmin):
     # Display related fields from the User model using 'admin.username' and 'admin.email'
     list_display = (
         "get_username",
         "get_email",
         "first_name",
         "last_name",
+        "company_code",
+        "approval_status",
         "phone",
     )
     search_fields = (
         "admin__username",
+        "admin__email",
+        "company_code",
         "first_name",
         "last_name",
         "phone",
     )
-    list_filter = ("admin__username",)  # Filter by user related field
+    list_filter = ("approval_status", "admin__username")
 
     # Define methods to display fields from related User model
     def get_username(self, obj):
@@ -82,15 +94,18 @@ class AdminAdmin(admin.ModelAdmin):
         "get_email",
         "first_name",
         "last_name",
+        "organization",
         "phone",
     )
     search_fields = (
         "admin__username",
+        "organization__name",
         "first_name",
         "last_name",
         "phone",
     )
-    list_filter = ("admin__username",)  # Filter by user related field
+    list_filter = ("organization", "approval_status", "admin__username")
+    raw_id_fields = ("organization",)
 
     # Define methods to display fields from related User model
     def get_username(self, obj):
@@ -110,14 +125,18 @@ class StaffAdmin(admin.ModelAdmin):
         "get_email",
         "first_name",
         "last_name",
+        "organization",
         "phone",
     )
     search_fields = (
         "staff__username",
+        "organization__name",
         "first_name",
         "last_name",
         "phone",
     )
+    list_filter = ("organization",)
+    raw_id_fields = ("organization",)
 
     # Define methods to display fields from related User model
     def get_username(self, obj):
@@ -149,6 +168,11 @@ class Flight_modelAdmin(admin.ModelAdmin):
         "get_user_last_name",
         "origin",
         "destination",
+        "organization",
+        "travel_agency",
+        "requested_by_staff",
+        "assigned_admin",
+        "approved_by_admin",
         "departure_date",
         "return_date",
         "passenger_count",
@@ -159,6 +183,12 @@ class Flight_modelAdmin(admin.ModelAdmin):
     search_fields = (
         "user__first_name",
         "user__last_name",
+        "organization__name",
+        "travel_agency__admin__username",
+        "travel_agency__admin__email",
+        "requested_by_staff__staff__username",
+        "assigned_admin__admin__username",
+        "approved_by_admin__admin__username",
         "origin",
         "destination",
         "departure_date",
@@ -170,20 +200,24 @@ class Flight_modelAdmin(admin.ModelAdmin):
         "departure_date",
         "return_date",
         "travel_class",
+        "organization",
+        "travel_agency",
         "user",
         "approved",  # Add approved status to list_filter
     )
-    raw_id_fields = ("user",)
+    raw_id_fields = ("user", "organization", "travel_agency", "requested_by_staff", "assigned_admin", "approved_by_admin")
 
     # Define method to get the first name from the related User model
     def get_user_first_name(self, obj):
-        return obj.user.first_name
+        user = obj.requesting_user()
+        return user.first_name if user else ""
 
     get_user_first_name.short_description = 'First Name'
 
     # Define method to get the last name from the related User model
     def get_user_last_name(self, obj):
-        return obj.user.last_name
+        user = obj.requesting_user()
+        return user.last_name if user else ""
 
     get_user_last_name.short_description = 'Last Name'
 
@@ -214,10 +248,11 @@ class LocalFlightFareAdmin(admin.ModelAdmin):
 
 # Register models
 admin.site.register(User, UserAdmin)
+admin.site.register(Organization, OrganizationAdmin)
 admin.site.register(Admin, AdminAdmin)
 admin.site.register(Staff, StaffAdmin)
 admin.site.register(Profile, ProfileAdmin)
 admin.site.register(Flight_model, Flight_modelAdmin)
 admin.site.register(PriceIncrement, PriceIncrementAdmin)
-admin.site.register(ThriveAdmin, ThriveAdminAdmin)
+admin.site.register(TravelAgency, TravelAgencyAdmin)
 admin.site.register(LocalFlightFare, LocalFlightFareAdmin)

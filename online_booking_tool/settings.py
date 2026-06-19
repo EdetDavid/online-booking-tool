@@ -79,8 +79,51 @@ AWS_SES_REGION_NAME = env('AWS_SES_REGION_NAME')
 AWS_SES_REGION_ENDPOINT = env('AWS_SES_REGION_ENDPOINT')
 
 # Email Backend Configuration
-EMAIL_BACKEND = 'django_ses.SESBackend'
+EMAIL_BACKEND = os.environ.get(
+    'EMAIL_BACKEND',
+    'demo.brevo_email_backend.BrevoEmailBackend',
+)
 EMAIL_HOST_USER = env('EMAIL_HOST_USER')
+BREVO_API_KEY = os.environ.get('BREVO_API_KEY', '')
+BREVO_API_URL = os.environ.get(
+    'BREVO_API_URL',
+    'https://api.brevo.com/v3/smtp/email',
+)
+BREVO_SENDER_EMAIL = os.environ.get('BREVO_SENDER_EMAIL', EMAIL_HOST_USER)
+BREVO_SENDER_NAME = os.environ.get('BREVO_SENDER_NAME', 'Online Booking Tool')
+EMAIL_FALLBACK_BACKEND = os.environ.get(
+    'EMAIL_FALLBACK_BACKEND',
+    'django_ses.SESBackend',
+)
+TRAVEL_AGENCY_DEFAULT_COMPANY_CODE = os.environ.get(
+    'TRAVEL_AGENCY_DEFAULT_COMPANY_CODE',
+    'OBT1234',
+)
+
+
+def parse_csv(value):
+    return [item.strip() for item in str(value or '').split(',') if item.strip()]
+
+
+ROLE_EMAIL_RECIPIENTS = {
+    'admin': parse_csv(os.environ.get('ADMIN_EMAIL_RECIPIENTS', '')),
+    'staff': parse_csv(os.environ.get('STAFF_EMAIL_RECIPIENTS', '')),
+    'travel_agency': parse_csv(
+        os.environ.get('TRAVEL_AGENCY_EMAIL_RECIPIENTS', '')
+    ),
+}
+ROLE_EMAIL_FALLBACK_RECIPIENTS = parse_csv(
+    os.environ.get('ROLE_EMAIL_FALLBACK_RECIPIENTS', EMAIL_HOST_USER)
+)
+FLIGHT_APPROVAL_REQUEST_RECIPIENT_ROLES = parse_csv(
+    os.environ.get('FLIGHT_APPROVAL_REQUEST_RECIPIENT_ROLES', 'admin')
+)
+BOOKING_NOTIFICATION_RECIPIENT_ROLES = parse_csv(
+    os.environ.get('BOOKING_NOTIFICATION_RECIPIENT_ROLES', 'travel_agency')
+)
+HOTEL_BOOKING_NOTIFICATION_RECIPIENT_ROLES = parse_csv(
+    os.environ.get('HOTEL_BOOKING_NOTIFICATION_RECIPIENT_ROLES', 'travel_agency')
+)
 
 
 TEMPLATES = [
@@ -141,6 +184,7 @@ AUTH_PASSWORD_VALIDATORS = [
 # Login and logout redirects
 LOGIN_REDIRECT_URL = 'home'  # Redirect after successful login
 LOGOUT_REDIRECT_URL = 'login'  # Redirect to login page after logout
+CSRF_FAILURE_VIEW = 'demo.views.csrf_failure'
 
 # Internationalization
 LANGUAGE_CODE = 'en-us'

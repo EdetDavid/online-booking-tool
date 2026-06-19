@@ -234,13 +234,15 @@
             }
         }
     </style>
+    <link rel="stylesheet" href="{% static 'demo/css/responsive_nav.css' %}">
 </head>
-<body>
+<body class="dashboard-body">
     <div class="main-container">
+        <div class="sidebar-backdrop" aria-hidden="true"></div>
         <!-- Sidebar Section -->
-        <div class="sidebar">
+        <div class="sidebar" id="dashboardSidebar">
             <h2>Admin Dashboard</h2>
-            <a class="my-2 text-decoration-none" href="{% url 'admin_profile' %}" class="{% if request.resolver_match.url_name == 'admin_profile' %}active{% endif %}">
+            <a class="my-2 text-decoration-none {% if request.resolver_match.url_name == 'admin_profile' %}active{% endif %}" href="{% url 'admin_profile' %}">
                 <i class="fas fa-user-circle"></i>Profile
             </a>
             
@@ -262,16 +264,16 @@
                 </div>
             </div>
 
-            <a class="my-2 text-decoration-none" href="{% url 'admin_approval_view' %}" class="{% if request.resolver_match.url_name == 'admin_approval_view' %}active{% endif %}">
+            <a class="my-2 text-decoration-none {% if request.resolver_match.url_name == 'admin_approval_view' %}active{% endif %}" href="{% url 'admin_approval_view' %}">
                 <i class="fas fa-check-circle"></i>Approve Admin
             </a>
-            <a class="my-2 text-decoration-none" href="{% url 'approve_flight' %}" class="{% if request.resolver_match.url_name == 'approve_flight' %}active{% endif %}">
+            <a class="my-2 text-decoration-none {% if request.resolver_match.url_name == 'approve_flight' %}active{% endif %}" href="{% url 'approve_flight' %}">
                 <i class="fas fa-check-circle"></i>Approve Flight
             </a>
-            <a class="my-2 text-decoration-none" href="{% url 'staff_list' %}" class="{% if request.resolver_match.url_name == 'staff_list' %}active{% endif %}">
+            <a class="my-2 text-decoration-none {% if request.resolver_match.url_name == 'staff_list' %}active{% endif %}" href="{% url 'staff_list' %}">
                 <i class="fas fa-users"></i>Staffs
             </a>
-            <a class="my-2 text-decoration-none" href="{% url 'report' %}" class="{% if request.resolver_match.url_name == 'report' %}active{% endif %}">
+            <a class="my-2 text-decoration-none {% if request.resolver_match.url_name == 'report' %}active{% endif %}" href="{% url 'report' %}">
                 <i class="fas fa-chart-line"></i>Reports
             </a>
         </div>
@@ -279,9 +281,14 @@
         <!-- Main Content Section -->
         <div class="main-content">
             <!-- Sidebar Toggle Button -->
-            <div class="sidebar-toggle" title="Toggle Sidebar">
+            <button type="button"
+                    class="sidebar-toggle"
+                    title="Toggle navigation"
+                    aria-controls="dashboardSidebar"
+                    aria-expanded="false"
+                    aria-label="Toggle navigation">
                 <i class="fas fa-bars"></i>
-            </div>
+            </button>
             <div class="navbar">
                 <h1>Welcome, {{ request.user.username }}</h1>
                 <div class="navbar-right">
@@ -296,48 +303,6 @@
         </div>
     </div>
 
-    <script>
-        const sidebar = document.querySelector('.sidebar');
-        const sidebarToggle = document.querySelector('.sidebar-toggle');
-        const mainContainer = document.querySelector('.main-container');
-
-        // Dropdown functionality
-        document.querySelectorAll('.dropdown-toggle').forEach(dropdownToggle => {
-            dropdownToggle.addEventListener('click', (e) => {
-                e.preventDefault();
-                const dropdown = dropdownToggle.parentElement;
-                dropdown.classList.toggle('active');
-            });
-        });
-
-        sidebarToggle.addEventListener('click', () => {
-            sidebar.classList.toggle('open');
-            mainContainer.classList.toggle('sidebar-closed');
-        });
-
-        // Close sidebar when clicking outside
-        document.addEventListener('click', (event) => {
-            if (!sidebar.contains(event.target) && !sidebarToggle.contains(event.target)) {
-                sidebar.classList.remove('open');
-                mainContainer.classList.add('sidebar-closed');
-            }
-        });
-
-        // Show the toggle button only when the screen width is less than 768px
-        function updateToggleVisibility() {
-            if (window.innerWidth < 768) {
-                sidebarToggle.style.display = 'block';
-                sidebar.classList.remove('open');
-                mainContainer.classList.add('sidebar-closed');
-            } else {
-                sidebarToggle.style.display = 'none';
-                sidebar.classList.remove('open');
-                mainContainer.classList.remove('sidebar-closed');
-            }
-        }
-
-        window.addEventListener('resize', updateToggleVisibility);
-        updateToggleVisibility(); 
-    </script>
+    <script src="{% static 'demo/js/responsive_nav.js' %}"></script>
 </body>
 </html>

@@ -1,0 +1,139 @@
+{% extends 'demo/travel_agency/base.html' %}
+
+{% block title %}Pending Travel Agency Approvals{% endblock %}
+
+{% block content %}
+    <link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css">
+    <style>
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+
+        .table-container {
+            background: #ffffff;
+            border-radius: 12px;
+            overflow-x: auto;
+            box-shadow: 0 8px 16px rgba(0, 0, 0, 0.1);
+            padding: 30px;
+            margin-top: 30px;
+        }
+
+        h1 {
+            font-size: 2rem;
+            margin-bottom: 25px;
+            color: #007bff;
+            text-align: center;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 20px;
+            min-width: 650px;
+        }
+
+        thead {
+            background: #007bff;
+            color: #ffffff;
+        }
+
+        th,
+        td {
+            padding: 1rem;
+            text-align: left;
+        }
+
+        th {
+            font-weight: bold;
+            border-bottom: 3px solid #e1e1e1;
+            font-size: 1.125rem;
+        }
+
+        td {
+            border-bottom: 2px solid #e1e1e1;
+            font-size: 1rem;
+        }
+
+        tr:nth-child(even) {
+            background-color: #f9f9f9;
+        }
+
+        .btn-approve,
+        .btn-disapprove {
+            padding: 0.75rem 1.5rem;
+            border: none;
+            border-radius: 5px;
+            font-size: 0.875rem;
+            cursor: pointer;
+        }
+
+        .btn-approve {
+            background-color: #28a745;
+            color: white;
+            margin-right: 10px;
+            margin-bottom: 5px;
+        }
+
+        .btn-disapprove {
+            background-color: #dc3545;
+            color: white;
+        }
+
+        .empty-state {
+            margin: 0;
+            padding: 24px;
+            text-align: center;
+            color: #6c757d;
+            background: #f8f9fa;
+            border-radius: 8px;
+        }
+    </style>
+
+    <div class="container">
+        <div class="table-container">
+            <h1>Pending Travel Agency Approvals</h1>
+
+            {% if pending_agencies %}
+                <div class="table-responsive">
+                    <table class="table table-bordered table-striped">
+                        <thead>
+                            <tr>
+                                <th>Username</th>
+                                <th>First Name</th>
+                                <th>Last Name</th>
+                                <th>Email</th>
+                                <th>Phone</th>
+                                <th>Company Code</th>
+                                <th>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for agency in pending_agencies %}
+                                <tr>
+                                    <td data-label="Username">{{ agency.admin.username }}</td>
+                                    <td data-label="First Name">{{ agency.first_name }}</td>
+                                    <td data-label="Last Name">{{ agency.last_name }}</td>
+                                    <td data-label="Email">{{ agency.admin.email }}</td>
+                                    <td data-label="Phone">{{ agency.phone }}</td>
+                                    <td data-label="Company Code">{{ agency.company_code|default:"Not set" }}</td>
+                                    <td data-label="Actions">
+                                        <form method="POST">
+                                            {% csrf_token %}
+                                            <input type="hidden" name="agency_id" value="{{ agency.id }}">
+                                            <button type="submit" name="action" value="approve" class="btn-approve">Approve</button>
+                                            <button type="submit" name="action" value="disapprove" class="btn-disapprove">Disapprove</button>
+                                        </form>
+                                    </td>
+                                </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            {% else %}
+                <p class="empty-state">No pending Travel Agencies for approval.</p>
+            {% endif %}
+        </div>
+    </div>
+{% endblock %}
