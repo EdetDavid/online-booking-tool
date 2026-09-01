@@ -2,7 +2,11 @@
 from django.db import models
 from django.conf import settings
 from django.contrib.auth.models import AbstractUser
+from django.core.validators import MinValueValidator
+from decimal import Decimal
 import datetime
+
+from .pricing import DEFAULT_EXCHANGE_RATE
 
 # Custom User model
 class User(AbstractUser):
@@ -65,6 +69,13 @@ class TravelAgency(models.Model):
     phone = models.CharField(max_length=15, blank=True, null=True)  # Added phone field
     company_code = models.CharField(max_length=50, unique=True, null=True, blank=True)
     approval_status = models.BooleanField(default=False)  # Added approval
+    exchange_rate = models.DecimalField(
+        "USD to NGN exchange rate",
+        max_digits=12,
+        decimal_places=4,
+        default=DEFAULT_EXCHANGE_RATE,
+        validators=[MinValueValidator(Decimal("0.0001"))],
+    )
 
     def __str__(self):
         return f'{self.admin.username} Travel Agency Profile'
@@ -174,6 +185,8 @@ class Flight_model(models.Model):
     
     # New field for approval status
     approved = models.BooleanField(default=False)
+    booking_payload = models.JSONField(null=True, blank=True)
+    booking_completed_at = models.DateTimeField(null=True, blank=True)
 
     def __str__(self):
         return f"Flight from {self.origin} to {self.destination} on {self.departure_date}"

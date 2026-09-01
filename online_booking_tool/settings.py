@@ -27,12 +27,44 @@ DEBUG = env('DEBUG')
 # HOST_URL = env('HOST_URL', default='localhost')
 # ALLOWED_HOSTS = ['localhost', '0.0.0.0', '127.0.0.1', HOST_URL]
 ALLOWED_HOSTS = ['*']
-AMADEUS_CLIENT_ID = env('AMADEUS_CLIENT_ID')
-AMADEUS_CLIENT_SECRET = env('AMADEUS_CLIENT_SECRET')
+FLIGHT_SEARCH_PROVIDER = env(
+    'FLIGHT_SEARCH_PROVIDER', default='duffel').strip().lower()
+DUFFEL_ACCESS_TOKEN = env('DUFFEL_ACCESS_TOKEN', default='')
+DUFFEL_API_BASE_URL = env('DUFFEL_API_BASE_URL',
+                          default='https://api.duffel.com')
+DUFFEL_API_VERSION = env('DUFFEL_API_VERSION', default='v2')
+DUFFEL_SUPPLIER_TIMEOUT_MS = env.int(
+    'DUFFEL_SUPPLIER_TIMEOUT_MS', default=15000)
+FLIGHT_SEARCH_TIMEOUT_SECONDS = env.int(
+    'FLIGHT_SEARCH_TIMEOUT_SECONDS', default=25)
+FLIGHT_SEARCH_RELAX_TLS_STRICT = env.bool(
+    'FLIGHT_SEARCH_RELAX_TLS_STRICT', default=False)
+FLIGHT_SEARCH_CACHE_SECONDS = env.int(
+    'FLIGHT_SEARCH_CACHE_SECONDS', default=60)
+ALLOW_DUFFEL_TEST_DATA = env.bool('ALLOW_DUFFEL_TEST_DATA', default=True)
+
+# Amadeus remains available for hotels and as an explicitly selected legacy
+# flight provider, but its credentials are not required for Duffel flight search.
+AMADEUS_CLIENT_ID = env('AMADEUS_CLIENT_ID', default='')
+AMADEUS_CLIENT_SECRET = env('AMADEUS_CLIENT_SECRET', default='')
 AMADEUS_HOSTNAME = os.environ.get(
     'AMADEUS_HOSTNAME', 'test')  # Default to 'test'
 USE_LIVE_FLIGHT_API = env.bool('USE_LIVE_FLIGHT_API', default=True)
-USE_LIVE_HOTEL_API = env.bool('USE_LIVE_HOTEL_API', default=USE_LIVE_FLIGHT_API)
+USE_LIVE_HOTEL_API = env.bool(
+    'USE_LIVE_HOTEL_API', default=USE_LIVE_FLIGHT_API)
+HOTEL_SEARCH_PROVIDER = env(
+    'HOTEL_SEARCH_PROVIDER',
+    default='amadeus',
+).strip().lower()
+ALLOW_HOTEL_TEST_DATA = env.bool('ALLOW_HOTEL_TEST_DATA', default=True)
+HOTEL_SEARCH_TIMEOUT_SECONDS = env.int(
+    'HOTEL_SEARCH_TIMEOUT_SECONDS',
+    default=30,
+)
+HOTEL_SEARCH_CACHE_SECONDS = env.int(
+    'HOTEL_SEARCH_CACHE_SECONDS',
+    default=300,
+)
 MIN_HOTEL_RESULTS = env.int('MIN_HOTEL_RESULTS', default=12)
 
 
@@ -47,7 +79,7 @@ INSTALLED_APPS = [
     'django.contrib.humanize',
     "widget_tweaks",
     'demo',
-    
+
 ]
 
 MIDDLEWARE = [
@@ -122,7 +154,8 @@ BOOKING_NOTIFICATION_RECIPIENT_ROLES = parse_csv(
     os.environ.get('BOOKING_NOTIFICATION_RECIPIENT_ROLES', 'travel_agency')
 )
 HOTEL_BOOKING_NOTIFICATION_RECIPIENT_ROLES = parse_csv(
-    os.environ.get('HOTEL_BOOKING_NOTIFICATION_RECIPIENT_ROLES', 'travel_agency')
+    os.environ.get('HOTEL_BOOKING_NOTIFICATION_RECIPIENT_ROLES',
+                   'travel_agency')
 )
 
 

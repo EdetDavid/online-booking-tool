@@ -25,8 +25,8 @@
             <div class="cart-hero-copy">
                 <h1>Your travel cart</h1>
                 <p>
-                    Keep flight and hotel options together while you build your trip.
-                    Each item is submitted through its normal approval or booking workflow.
+                    Saved options and flight requests stay here while your trip moves
+                    through approval.
                 </p>
             </div>
         </div>
@@ -36,29 +36,57 @@
         {% if cart_items %}
             <section class="cart-items" aria-label="Cart items">
                 {% for item in cart_items %}
-                    <article class="cart-item cart-item--{{ item.type }}">
+                    <article
+                        class="cart-item cart-item--{{ item.type }}{% if item.type == 'flight' %} cart-item--{{ item.cart_state }}{% endif %}"
+                        {% if item.type == 'flight' %}data-approval-status="{{ item.cart_state }}"{% endif %}
+                    >
                         <div class="cart-item-icon" aria-hidden="true">
                             <i class="fas {% if item.type == 'flight' %}fa-plane{% else %}fa-hotel{% endif %}"></i>
                         </div>
 
                         <div>
-                            <p class="cart-item-type">{{ item.type }}</p>
+                            <div class="cart-item-kicker">
+                                <p class="cart-item-type">{{ item.type }}</p>
+                                {% if item.type == 'flight' %}
+                                    {% if item.cart_state == 'pending' %}
+                                        <span class="cart-status-pill cart-status-pill--pending">
+                                            <i class="fas fa-clock" aria-hidden="true"></i>
+                                            <span class="visually-hidden">Approval status:</span>
+                                            Pending approval
+                                        </span>
+                                    {% elif item.cart_state == 'approved' %}
+                                        <span class="cart-status-pill cart-status-pill--approved">
+                                            <i class="fas fa-circle-check" aria-hidden="true"></i>
+                                            <span class="visually-hidden">Approval status:</span>
+                                            Approved <span aria-hidden="true">&middot;</span> Ready to book
+                                        </span>
+                                    {% else %}
+                                        <span class="cart-status-pill cart-status-pill--saved">
+                                            <i class="fas fa-bookmark" aria-hidden="true"></i>
+                                            <span class="visually-hidden">Approval status:</span>
+                                            Saved option
+                                        </span>
+                                    {% endif %}
+                                {% endif %}
+                            </div>
                             {% if item.type == 'flight' %}
                                 <h2>{{ item.summary.origin }} to {{ item.summary.destination }}</h2>
                                 <div class="cart-item-meta">
-                                    <span>{{ item.summary.departure_date }}{% if item.summary.return_date %} – {{ item.summary.return_date }}{% endif %}</span>
-                                    <span>{{ item.summary.departure_time }} – {{ item.summary.arrival_time }}</span>
+                                    <span>{{ item.summary.departure_date }}{% if item.summary.return_date %} &ndash; {{ item.summary.return_date }}{% endif %}</span>
+                                    {% if item.summary.departure_time or item.summary.arrival_time %}
+                                        <span>{{ item.summary.departure_time }}{% if item.summary.departure_time and item.summary.arrival_time %} &ndash; {% endif %}{{ item.summary.arrival_time }}</span>
+                                    {% endif %}
                                     <span>{{ item.summary.passengers }} passenger{{ item.summary.passengers|pluralize }}</span>
                                     <span>{{ item.summary.cabin }}</span>
                                     <span>{{ item.summary.trip_type }}</span>
                                     {% if item.summary.legs > 2 %}<span>{{ item.summary.legs }} flights</span>{% endif %}
-                                    <span>{{ item.summary.airlines }}</span>
-                                    <span>{{ item.summary.stops }} stop{{ item.summary.stops|pluralize }}</span>
+                                    {% if item.summary.airlines %}<span>{{ item.summary.airlines }}</span>{% endif %}
+                                    {% if item.summary.stops == 0 or item.summary.stops %}<span>{{ item.summary.stops }} stop{{ item.summary.stops|pluralize }}</span>{% endif %}
                                 </div>
                             {% else %}
                                 <h2>{{ item.summary.hotel_name }}</h2>
                                 <div class="cart-item-meta">
-                                    <span>{{ item.summary.check_in }} – {{ item.summary.check_out }}</span>
+                                    <span>{{ item.summary.check_in }} &ndash; {{ item.summary.check_out }}</span>
                                     <span>{{ item.summary.guests }} guest{{ item.summary.guests|pluralize }}</span>
                                 </div>
                                 <p class="cart-item-description">{{ item.summary.description }}</p>
@@ -68,12 +96,34 @@
                         <div class="cart-item-side">
                             <span class="cart-price">&#8358;{{ item.summary.price }}</span>
                             <div class="cart-item-actions">
-                                {% if cart_checkout_allowed %}
+                                {% if item.type == 'flight' and item.cart_state == 'pending' %}
+                                    <span class="cart-state-note cart-state-note--pending">
+                                        <i class="fas fa-hourglass-half" aria-hidden="true"></i>
+                                        <span>
+                                            <strong>Request submitted</strong>
+                                            <small>Waiting for administrator review.</small>
+                                        </span>
+                                    </span>
+                                {% elif item.type == 'flight' and item.cart_state == 'approved' and not item.bookable %}
+                                    <span class="cart-state-note cart-state-note--pending">
+                                        <i class="fas fa-circle-info" aria-hidden="true"></i>
+                                        <span>
+                                            <strong>Approved</strong>
+                                            <small>Contact your administrator to restore the booking details.</small>
+                                        </span>
+                                    </span>
+                                {% elif cart_checkout_allowed %}
                                     {% if item.type == 'flight' %}
                                         <form method="post" action="{% url 'book_flight' %}">
                                             {% csrf_token %}
                                             <input type="hidden" name="cart_item_id" value="{{ item.id }}">
-                                            <button class="cart-primary" type="submit">Submit request</button>
+                                            <button class="cart-primary" type="submit">
+                                                {% if item.cart_state == 'approved' %}
+                                                    <i class="fas fa-ticket" aria-hidden="true"></i> Book flight
+                                                {% else %}
+                                                    <i class="fas fa-paper-plane" aria-hidden="true"></i> Submit for approval
+                                                {% endif %}
+                                            </button>
                                         </form>
                                     {% else %}
                                         <form method="post" action="{% url 'book_hotel' item.payload.offer_id %}">
@@ -87,10 +137,12 @@
                                 {% else %}
                                     <span class="cart-primary" title="Only staff accounts can submit travel requests">Staff access required</span>
                                 {% endif %}
-                                <form method="post" action="{% url 'cart_remove' item.id %}">
-                                    {% csrf_token %}
-                                    <button class="cart-remove" type="submit" aria-label="Remove this item">Remove</button>
-                                </form>
+                                {% if item.removable %}
+                                    <form method="post" action="{% url 'cart_remove' item.id %}">
+                                        {% csrf_token %}
+                                        <button class="cart-remove" type="submit" aria-label="Remove this item">Remove</button>
+                                    </form>
+                                {% endif %}
                             </div>
                         </div>
                     </article>
@@ -103,18 +155,49 @@
                     <span>Items</span>
                     <strong>{{ cart_items|length }}</strong>
                 </div>
+                {% if flight_cart_count %}
+                    <section class="cart-status-summary" aria-labelledby="flightStatusHeading">
+                        <div class="cart-status-summary-heading">
+                            <h3 id="flightStatusHeading">Flight status</h3>
+                            <span>{{ flight_cart_count }} total</span>
+                        </div>
+                        {% if flight_status_counts.saved %}
+                            <div class="cart-status-summary-row">
+                                <span class="cart-status-summary-icon cart-status-summary-icon--saved" aria-hidden="true"><i class="fas fa-bookmark"></i></span>
+                                <span><strong>Saved</strong><small>Not submitted</small></span>
+                                <b>{{ flight_status_counts.saved }}</b>
+                            </div>
+                        {% endif %}
+                        {% if flight_status_counts.pending %}
+                            <div class="cart-status-summary-row">
+                                <span class="cart-status-summary-icon cart-status-summary-icon--pending" aria-hidden="true"><i class="fas fa-clock"></i></span>
+                                <span><strong>Pending approval</strong><small>Waiting for administrator review</small></span>
+                                <b>{{ flight_status_counts.pending }}</b>
+                            </div>
+                        {% endif %}
+                        {% if flight_status_counts.approved %}
+                            <div class="cart-status-summary-row">
+                                <span class="cart-status-summary-icon cart-status-summary-icon--approved" aria-hidden="true"><i class="fas fa-circle-check"></i></span>
+                                <span><strong>Approved</strong><small>Ready to book</small></span>
+                                <b>{{ flight_status_counts.approved }}</b>
+                            </div>
+                        {% endif %}
+                    </section>
+                {% endif %}
                 <div class="cart-summary-row cart-summary-row--total">
                     <span>Estimated total</span>
                     <strong>&#8358;{{ cart_total|floatformat:0|intcomma }}</strong>
                 </div>
                 <p class="cart-summary-note">
-                    Saved totals are estimates. Flights still require the normal
-                    administrator approval before ticketing.
+                    Submitted flight requests stay here through approval and are removed
+                    only after booking is complete. Prices remain estimates until booking.
                 </p>
-                <form method="post" action="{% url 'cart_clear' %}">
-                    {% csrf_token %}
-                    <button class="cart-clear" type="submit">Clear cart</button>
-                </form>
+                {% if has_removable_cart_items %}
+                    <form method="post" action="{% url 'cart_clear' %}">
+                        {% csrf_token %}
+                        <button class="cart-clear" type="submit">Clear saved items</button>
+                    </form>
+                {% endif %}
                 <div class="cart-shop-links">
                     <a class="cart-shop-link" href="{% url 'home' %}#search">Add flight</a>
                     <a class="cart-shop-link" href="{% url 'hotel' %}#search">Add hotel</a>

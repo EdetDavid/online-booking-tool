@@ -2,6 +2,7 @@ from django.contrib.auth import get_user_model
 from django.test import Client, TestCase
 from django.urls import reverse
 from datetime import date
+from decimal import Decimal
 from unittest.mock import patch
 
 import json
@@ -48,6 +49,60 @@ class BookingCartTests(TestCase):
                 }
             ],
         }
+
+    def login_staff(self):
+        user = get_user_model().objects.create_user(
+            username="cart_staff",
+            email="cart-staff@example.com",
+            password="password-123",
+        )
+        organization = Organization.objects.create(
+            name="Cart Organization",
+            join_code="CARTORG",
+        )
+        Staff.objects.create(
+            staff=user,
+            organization=organization,
+            first_name="Cart",
+            last_name="Staff",
+        )
+        Profile.objects.create(user=user)
+        self.client.force_login(user)
+        return user
+
+    def create_flight_request(self, user, **overrides):
+        staff = Staff.objects.get(staff=user)
+        values = {
+            "user": user,
+            "requested_by_staff": staff,
+            "organization": staff.organization,
+            "origin": "LOS",
+            "destination": "JFK",
+            "departure_date": date(2026, 7, 10),
+            "return_date": None,
+            "passenger_count": 1,
+            "travel_class": "ECONOMY",
+            "price": Decimal("800000.00"),
+        }
+        values.update(overrides)
+        return Flight_model.objects.create(**values)
+
+    def submit_and_approve_flight(self, flight_data=None):
+        user = self.login_staff()
+        payload = json.loads(json.dumps(flight_data or self.flight_data))
+        if flight_data is None:
+            payload["source"] = "LOCAL_FARE_DB"
+        with patch("demo.views.send_flight_pending_email"):
+            response = self.client.post(
+                reverse("book_flight"),
+                {"flight_data": json.dumps(payload)},
+            )
+        self.assertRedirects(response, reverse("cart_detail"))
+        flight_request = Flight_model.objects.get(user=user)
+        flight_request.approved = True
+        flight_request.save(update_fields=["approved"])
+        cart_item = self.client.session["booking_cart"]["items"][0]
+        return user, flight_request, cart_item
 
     def test_cart_stores_flights_hotels_and_blocks_duplicates(self):
         flight_response = self.client.post(
@@ -99,50 +154,806 @@ class BookingCartTests(TestCase):
         self.assertEqual(self.client.session["booking_cart"]["items"], [])
 
     @patch("demo.views.send_flight_pending_email")
-    def test_submitting_cart_flight_creates_request_and_removes_item(
+    def test_book_now_adds_unapproved_flight_to_cart(
         self,
         mock_pending_email,
     ):
-        user = get_user_model().objects.create_user(
-            username="cart_staff",
-            email="cart-staff@example.com",
-            password="password-123",
+        user = self.login_staff()
+
+        response = self.client.post(
+            reverse("book_flight"),
+            {"flight_data": json.dumps(self.flight_data)},
         )
-        organization = Organization.objects.create(
-            name="Cart Organization",
-            join_code="CARTORG",
+
+        self.assertRedirects(response, reverse("cart_detail"))
+        flight_request = Flight_model.objects.get(
+            user=user,
+            origin="LOS",
+            destination="JFK",
+            approved=False,
         )
-        Staff.objects.create(
-            staff=user,
-            organization=organization,
-            first_name="Cart",
-            last_name="Staff",
+        items = self.client.session["booking_cart"]["items"]
+        self.assertEqual(len(items), 1)
+        self.assertEqual(items[0]["type"], "flight")
+        self.assertEqual(items[0]["payload"], self.flight_data)
+        self.assertEqual(items[0]["flight_request_id"], flight_request.pk)
+        self.assertFalse(flight_request.approved)
+        mock_pending_email.assert_called_once()
+
+    @patch("demo.views.send_flight_pending_email")
+    def test_old_matching_approval_cannot_authorize_a_new_request(
+        self,
+        mock_pending_email,
+    ):
+        user = self.login_staff()
+        old_approved_request = self.create_flight_request(
+            user,
+            approved=True,
         )
-        Profile.objects.create(user=user)
+
+        response = self.client.post(
+            reverse("book_flight"),
+            {"flight_data": json.dumps(self.flight_data)},
+        )
+
+        self.assertRedirects(response, reverse("cart_detail"))
+        requests = list(Flight_model.objects.filter(user=user).order_by("pk"))
+        self.assertEqual(len(requests), 2)
+        self.assertEqual(requests[0], old_approved_request)
+        self.assertTrue(requests[0].approved)
+        self.assertFalse(requests[1].approved)
+        self.assertEqual(
+            self.client.session["booking_cart"]["items"][0]["flight_request_id"],
+            requests[1].pk,
+        )
+        mock_pending_email.assert_called_once()
+
+    @patch("demo.views.send_flight_pending_email")
+    def test_submitting_cart_flight_keeps_item_while_approval_is_pending(
+        self,
+        mock_pending_email,
+    ):
+        user = self.login_staff()
 
         self.client.post(
             reverse("cart_add_flight"),
             {"flight_data": json.dumps(self.flight_data)},
         )
-        item_id = self.client.session["booking_cart"]["items"][0]["id"]
-        self.client.force_login(user)
+        original_item = self.client.session["booking_cart"]["items"][0]
 
         response = self.client.post(
             reverse("book_flight"),
-            {"cart_item_id": item_id},
+            {"cart_item_id": original_item["id"]},
         )
 
-        self.assertRedirects(response, reverse("home"))
-        self.assertTrue(
-            Flight_model.objects.filter(
-                user=user,
-                origin="LOS",
-                destination="JFK",
-                approved=False,
-            ).exists()
+        self.assertRedirects(response, reverse("cart_detail"))
+        flight_request = Flight_model.objects.get(
+            user=user,
+            origin="LOS",
+            destination="JFK",
+            approved=False,
         )
-        self.assertEqual(self.client.session["booking_cart"]["items"], [])
+        stored_items = self.client.session["booking_cart"]["items"]
+        self.assertEqual(len(stored_items), 1)
+        self.assertEqual(stored_items[0]["id"], original_item["id"])
+        self.assertEqual(stored_items[0]["payload"], original_item["payload"])
+        self.assertEqual(stored_items[0]["flight_request_id"], flight_request.pk)
         mock_pending_email.assert_called_once()
+
+    def test_database_only_pending_flight_is_visible_locked_and_pending(self):
+        user = self.login_staff()
+        pending_flight = self.create_flight_request(user)
+
+        response = self.client.get(reverse("cart_detail"))
+
+        self.assertEqual(response.status_code, 200)
+        items = list(response.context["cart_items"])
+        self.assertEqual(len(items), 1)
+        self.assertEqual(items[0]["type"], "flight")
+        self.assertEqual(items[0]["cart_state"], "pending")
+        self.assertFalse(items[0]["removable"])
+        self.assertEqual(items[0]["summary"]["origin"], pending_flight.origin)
+        self.assertEqual(
+            items[0]["summary"]["destination"],
+            pending_flight.destination,
+        )
+        self.assertEqual(
+            response.context["flight_status_counts"],
+            {"saved": 0, "pending": 1, "approved": 0},
+        )
+        self.assertEqual(response.context["flight_cart_count"], 1)
+        self.assertEqual(response.context["pending_cart_count"], 1)
+        self.assertContains(response, "LOS to JFK")
+        self.assertContains(response, 'data-approval-status="pending"')
+        self.assertContains(
+            response,
+            'class="cart-status-pill cart-status-pill--pending"',
+        )
+        self.assertContains(response, 'class="fas fa-clock"')
+        self.assertContains(response, "Pending approval")
+        self.assertContains(
+            response,
+            'class="cart-state-note cart-state-note--pending"',
+        )
+        self.assertContains(response, 'class="fas fa-hourglass-half"')
+        self.assertContains(response, "Request submitted")
+        self.assertContains(response, "Waiting for administrator review.")
+        self.assertNotContains(
+            response,
+            f'action="{reverse("book_flight")}"',
+        )
+        self.assertNotContains(response, "Submit for approval")
+        self.assertNotContains(response, "Book flight")
+        self.assertNotContains(response, 'aria-label="Remove this item"')
+
+    def test_database_pending_flights_are_isolated_per_user_in_same_organization(self):
+        owner = self.login_staff()
+        organization = Staff.objects.get(staff=owner).organization
+        other_user = get_user_model().objects.create_user(
+            username="other_cart_staff",
+            email="other-cart-staff@example.com",
+            password="password-123",
+        )
+        Staff.objects.create(
+            staff=other_user,
+            organization=organization,
+            first_name="Other",
+            last_name="Staff",
+        )
+        Profile.objects.create(user=other_user)
+        self.create_flight_request(owner)
+        self.create_flight_request(
+            other_user,
+            origin="ACC",
+            destination="LHR",
+            price=Decimal("450000.00"),
+        )
+
+        owner_response = self.client.get(reverse("cart_detail"))
+        owner_routes = {
+            (item["summary"]["origin"], item["summary"]["destination"])
+            for item in owner_response.context["cart_items"]
+            if item["type"] == "flight"
+        }
+
+        other_client = Client()
+        other_client.force_login(other_user)
+        other_response = other_client.get(reverse("cart_detail"))
+        other_routes = {
+            (item["summary"]["origin"], item["summary"]["destination"])
+            for item in other_response.context["cart_items"]
+            if item["type"] == "flight"
+        }
+
+        self.assertEqual(owner_routes, {("LOS", "JFK")})
+        self.assertEqual(other_routes, {("ACC", "LHR")})
+
+    def test_matching_saved_and_database_pending_flight_is_counted_once(self):
+        user = self.login_staff()
+        self.client.post(
+            reverse("cart_add_flight"),
+            {"flight_data": json.dumps(self.flight_data)},
+        )
+        self.create_flight_request(user)
+
+        response = self.client.get(reverse("cart_detail"))
+
+        flight_items = [
+            item
+            for item in response.context["cart_items"]
+            if item["type"] == "flight"
+        ]
+        self.assertEqual(len(flight_items), 1)
+        self.assertEqual(flight_items[0]["cart_state"], "pending")
+        self.assertEqual(response.context["cart_count"], 1)
+        self.assertEqual(response.context["cart_total"], Decimal("800000.00"))
+
+    def test_approved_database_only_flight_is_excluded_from_cart(self):
+        user = self.login_staff()
+        self.create_flight_request(user, approved=True)
+
+        response = self.client.get(reverse("cart_detail"))
+
+        self.assertEqual(list(response.context["cart_items"]), [])
+        self.assertEqual(response.context["cart_count"], 0)
+        self.assertEqual(response.context["cart_total"], Decimal("0"))
+        self.assertNotContains(response, "LOS to JFK")
+
+    def test_unlinked_offer_matching_old_approved_request_stays_saved(self):
+        user = self.login_staff()
+        self.create_flight_request(user, approved=True)
+        self.client.post(
+            reverse("cart_add_flight"),
+            {"flight_data": json.dumps(self.flight_data)},
+        )
+
+        response = self.client.get(reverse("cart_detail"))
+
+        flight_items = [
+            item
+            for item in response.context["cart_items"]
+            if item["type"] == "flight"
+        ]
+        self.assertEqual(len(flight_items), 1)
+        self.assertEqual(flight_items[0]["cart_state"], "saved")
+        self.assertNotIn("flight_request_id", flight_items[0])
+        self.assertTrue(flight_items[0]["removable"])
+        self.assertEqual(
+            response.context["flight_status_counts"],
+            {"saved": 1, "pending": 0, "approved": 0},
+        )
+        self.assertEqual(response.context["flight_cart_count"], 1)
+        self.assertEqual(response.context["pending_cart_count"], 0)
+        self.assertContains(response, 'data-approval-status="saved"')
+        self.assertContains(
+            response,
+            'class="cart-status-pill cart-status-pill--saved"',
+        )
+        self.assertContains(response, 'class="fas fa-bookmark"')
+        self.assertContains(response, "Saved option")
+        self.assertContains(response, 'class="fas fa-paper-plane"')
+        self.assertContains(response, "Submit for approval")
+        self.assertContains(
+            response,
+            f'action="{reverse("book_flight")}"',
+        )
+        self.assertContains(response, 'aria-label="Remove this item"')
+        self.assertNotContains(
+            response,
+            'class="cart-status-pill cart-status-pill--approved"',
+        )
+        self.assertNotContains(response, "Book flight")
+
+    def test_invalid_or_foreign_explicit_request_id_is_not_signature_remapped(self):
+        owner = self.login_staff()
+        organization = Staff.objects.get(staff=owner).organization
+        foreign_user = get_user_model().objects.create_user(
+            username="foreign_cart_staff",
+            email="foreign-cart-staff@example.com",
+            password="password-123",
+        )
+        Staff.objects.create(
+            staff=foreign_user,
+            organization=organization,
+            first_name="Foreign",
+            last_name="Staff",
+        )
+        Profile.objects.create(user=foreign_user)
+
+        owner_request = self.create_flight_request(owner)
+        foreign_request = self.create_flight_request(foreign_user)
+        self.client.post(
+            reverse("cart_add_flight"),
+            {"flight_data": json.dumps(self.flight_data)},
+        )
+        base_item = self.client.session["booking_cart"]["items"][0]
+        explicit_ids = {
+            "invalid": max(owner_request.pk, foreign_request.pk) + 1000,
+            "foreign": foreign_request.pk,
+        }
+
+        for case, explicit_id in explicit_ids.items():
+            with self.subTest(case=case):
+                tagged_item = dict(base_item)
+                tagged_item["flight_request_id"] = explicit_id
+                session = self.client.session
+                session["booking_cart"] = {
+                    "items": [tagged_item],
+                    "updated_at": "test",
+                }
+                session.save()
+
+                response = self.client.get(reverse("cart_detail"))
+                flight_items = [
+                    item
+                    for item in response.context["cart_items"]
+                    if item["type"] == "flight"
+                ]
+                saved_item = next(
+                    item for item in flight_items if item["session_backed"]
+                )
+                pending_item = next(
+                    item for item in flight_items if not item["session_backed"]
+                )
+
+                self.assertEqual(len(flight_items), 2)
+                self.assertEqual(saved_item["cart_state"], "saved")
+                self.assertEqual(saved_item["flight_request_id"], explicit_id)
+                self.assertEqual(pending_item["cart_state"], "pending")
+                self.assertEqual(
+                    pending_item["flight_request_id"],
+                    owner_request.pk,
+                )
+                self.assertEqual(
+                    response.context["flight_status_counts"],
+                    {"saved": 1, "pending": 1, "approved": 0},
+                )
+
+    def test_global_cart_count_context_includes_every_own_pending_flight(self):
+        user = self.login_staff()
+        self.create_flight_request(user)
+        self.create_flight_request(
+            user,
+            origin="ABV",
+            destination="ACC",
+            departure_date=date(2026, 7, 12),
+            price=Decimal("325000.00"),
+        )
+
+        response = self.client.get(reverse("home"))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.context["cart_count"], 2)
+
+    def test_every_pending_database_flight_appears_beyond_saved_cart_limit(self):
+        user = self.login_staff()
+        for index in range(11):
+            self.create_flight_request(
+                user,
+                origin=f"A{index:02d}",
+                destination=f"B{index:02d}",
+                price=Decimal("100000.00") + index,
+            )
+
+        response = self.client.get(reverse("cart_detail"))
+
+        flight_items = [
+            item
+            for item in response.context["cart_items"]
+            if item["type"] == "flight"
+        ]
+        self.assertEqual(len(flight_items), 11)
+        self.assertEqual(response.context["cart_count"], 11)
+        self.assertTrue(
+            all(item["cart_state"] == "pending" for item in flight_items)
+        )
+
+    def test_saved_pending_flight_becomes_approved_and_bookable_without_duplicate(self):
+        user = self.login_staff()
+        self.client.post(
+            reverse("cart_add_flight"),
+            {"flight_data": json.dumps(self.flight_data)},
+        )
+        saved_item_id = self.client.session["booking_cart"]["items"][0]["id"]
+        flight_request = self.create_flight_request(user)
+
+        pending_response = self.client.get(reverse("cart_detail"))
+        pending_flights = [
+            item
+            for item in pending_response.context["cart_items"]
+            if item["type"] == "flight"
+        ]
+        self.assertEqual(len(pending_flights), 1)
+        self.assertEqual(pending_flights[0]["id"], saved_item_id)
+        self.assertEqual(pending_flights[0]["cart_state"], "pending")
+        self.assertEqual(
+            pending_response.context["flight_status_counts"],
+            {"saved": 0, "pending": 1, "approved": 0},
+        )
+        self.assertEqual(pending_response.context["flight_cart_count"], 1)
+        self.assertEqual(pending_response.context["pending_cart_count"], 1)
+        self.assertContains(
+            pending_response,
+            'class="cart-status-pill cart-status-pill--pending"',
+        )
+        self.assertContains(pending_response, 'class="fas fa-clock"')
+        self.assertContains(pending_response, "Pending approval")
+        self.assertContains(
+            pending_response,
+            'class="cart-state-note cart-state-note--pending"',
+        )
+        self.assertNotContains(
+            pending_response,
+            f'action="{reverse("book_flight")}"',
+        )
+        self.assertNotContains(
+            pending_response,
+            'aria-label="Remove this item"',
+        )
+
+        flight_request.approved = True
+        flight_request.save(update_fields=["approved"])
+        approved_response = self.client.get(reverse("cart_detail"))
+        approved_flights = [
+            item
+            for item in approved_response.context["cart_items"]
+            if item["type"] == "flight"
+        ]
+
+        self.assertEqual(len(approved_flights), 1)
+        self.assertEqual(approved_flights[0]["id"], saved_item_id)
+        self.assertEqual(approved_flights[0]["cart_state"], "approved")
+        self.assertEqual(approved_response.context["cart_count"], 1)
+        self.assertEqual(
+            approved_response.context["flight_status_counts"],
+            {"saved": 0, "pending": 0, "approved": 1},
+        )
+        self.assertEqual(approved_response.context["flight_cart_count"], 1)
+        self.assertEqual(approved_response.context["pending_cart_count"], 0)
+        self.assertContains(approved_response, 'data-approval-status="approved"')
+        self.assertContains(
+            approved_response,
+            'class="cart-status-pill cart-status-pill--approved"',
+        )
+        self.assertContains(approved_response, 'class="fas fa-circle-check"')
+        self.assertContains(approved_response, "Ready to book")
+        self.assertContains(
+            approved_response,
+            f'action="{reverse("book_flight")}"',
+        )
+        self.assertContains(approved_response, 'class="fas fa-ticket"')
+        self.assertContains(approved_response, "Book flight")
+        self.assertNotContains(
+            approved_response,
+            'aria-label="Remove this item"',
+        )
+        self.assertNotContains(approved_response, "Submit for approval")
+        self.assertNotContains(
+            approved_response,
+            'class="cart-state-note cart-state-note--pending"',
+        )
+
+    @patch("demo.views.send_flight_approval_email")
+    @patch("demo.views.send_flight_pending_email")
+    def test_admin_approval_changes_the_request_shown_to_staff(
+        self,
+        mock_pending_email,
+        mock_approval_email,
+    ):
+        staff_user = self.login_staff()
+        organization = Staff.objects.get(staff=staff_user).organization
+        admin_user = get_user_model().objects.create_user(
+            username="cart_approver",
+            email="cart-approver@example.com",
+            password="password-123",
+        )
+        admin = Admin.objects.create(
+            admin=admin_user,
+            organization=organization,
+            first_name="Cart",
+            last_name="Approver",
+            approval_status=True,
+        )
+        Profile.objects.create(user=admin_user)
+
+        submit_response = self.client.post(
+            reverse("book_flight"),
+            {"flight_data": json.dumps(self.flight_data)},
+        )
+        self.assertRedirects(submit_response, reverse("cart_detail"))
+        stored_item = self.client.session["booking_cart"]["items"][0]
+        flight_request = Flight_model.objects.get(user=staff_user)
+        self.assertFalse(flight_request.approved)
+
+        pending_cart = self.client.get(reverse("cart_detail"))
+        self.assertContains(pending_cart, "Pending approval")
+        self.assertContains(pending_cart, 'data-approval-status="pending"')
+        pending_page = self.client.get(reverse("pending_flights"))
+        self.assertContains(pending_page, "Pending approval")
+        self.assertContains(pending_page, "LOS")
+
+        admin_client = Client()
+        admin_client.force_login(admin_user)
+        approval_response = admin_client.post(
+            reverse("approve_flight"),
+            {"flight_ids": [str(flight_request.pk)]},
+        )
+        self.assertRedirects(approval_response, reverse("approve_flight"))
+
+        flight_request.refresh_from_db()
+        self.assertTrue(flight_request.approved)
+        self.assertEqual(flight_request.approved_by_admin, admin)
+        self.assertEqual(
+            self.client.session["booking_cart"]["items"],
+            [stored_item],
+        )
+        mock_pending_email.assert_called_once()
+        mock_approval_email.assert_called_once_with(flight_request)
+
+        approved_cart = self.client.get(reverse("cart_detail"))
+        self.assertContains(approved_cart, 'data-approval-status="approved"')
+        self.assertContains(approved_cart, "Approved")
+        self.assertNotContains(approved_cart, "Pending approval")
+        self.assertNotContains(approved_cart, 'aria-label="Remove this item"')
+        approved_page = self.client.get(reverse("approved_flights"))
+        self.assertContains(approved_page, "Approved")
+        self.assertContains(approved_page, "LOS")
+        self.assertNotIn(
+            flight_request,
+            self.client.get(reverse("pending_flights")).context["pending_flights"],
+        )
+
+    def test_approved_flight_cannot_be_removed_or_cleared_before_booking(self):
+        _, flight_request, cart_item = self.submit_and_approve_flight()
+
+        approved_cart = self.client.get(reverse("cart_detail"))
+        self.assertContains(approved_cart, 'data-approval-status="approved"')
+        self.assertContains(approved_cart, "Book flight")
+        self.assertNotContains(approved_cart, 'aria-label="Remove this item"')
+
+        self.client.post(reverse("cart_remove", args=[cart_item["id"]]))
+        self.assertEqual(
+            self.client.session["booking_cart"]["items"],
+            [cart_item],
+        )
+
+        self.client.post(reverse("cart_clear"))
+        self.assertEqual(
+            self.client.session["booking_cart"]["items"],
+            [cart_item],
+        )
+        flight_request.refresh_from_db()
+        self.assertIsNone(flight_request.booking_completed_at)
+
+    def test_approved_flight_is_restored_after_session_loss(self):
+        user, flight_request, _ = self.submit_and_approve_flight()
+
+        self.client.logout()
+        self.client.force_login(user)
+        restored_cart = self.client.get(reverse("cart_detail"))
+
+        flight_items = [
+            item
+            for item in restored_cart.context["cart_items"]
+            if item["type"] == "flight"
+        ]
+        self.assertEqual(len(flight_items), 1)
+        self.assertEqual(
+            flight_items[0]["flight_request_id"],
+            flight_request.pk,
+        )
+        self.assertEqual(flight_items[0]["cart_state"], "approved")
+        self.assertTrue(flight_items[0]["bookable"])
+        self.assertContains(restored_cart, "Book flight")
+
+        with patch("demo.views.send_flight_email"):
+            booking_response = self.client.post(
+                reverse("book_flight"),
+                {"cart_item_id": flight_items[0]["id"]},
+            )
+        self.assertEqual(booking_response.status_code, 200)
+        flight_request.refresh_from_db()
+        self.assertIsNotNone(flight_request.booking_completed_at)
+        self.assertEqual(
+            list(self.client.get(reverse("cart_detail")).context["cart_items"]),
+            [],
+        )
+
+    def test_successful_approved_local_booking_removes_the_cart_item(self):
+        _, flight_request, cart_item = self.submit_and_approve_flight()
+
+        with patch("demo.views.send_flight_email") as mock_email:
+            response = self.client.post(
+                reverse("book_flight"),
+                {"cart_item_id": cart_item["id"]},
+            )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertTemplateUsed(response, "demo/book_flight.html")
+        self.assertEqual(self.client.session["booking_cart"]["items"], [])
+        flight_request.refresh_from_db()
+        self.assertIsNotNone(flight_request.booking_completed_at)
+        mock_email.assert_called_once()
+
+    def test_failed_approved_local_booking_remains_in_the_cart(self):
+        _, flight_request, cart_item = self.submit_and_approve_flight()
+
+        with patch(
+            "demo.views.local_booking_confirmation",
+            side_effect=RuntimeError("local confirmation failed"),
+        ):
+            response = self.client.post(
+                reverse("book_flight"),
+                {"cart_item_id": cart_item["id"]},
+            )
+
+        self.assertRedirects(response, reverse("cart_detail"))
+        self.assertEqual(
+            self.client.session["booking_cart"]["items"],
+            [cart_item],
+        )
+        flight_request.refresh_from_db()
+        self.assertIsNone(flight_request.booking_completed_at)
+        retry_cart = self.client.get(reverse("cart_detail"))
+        self.assertContains(retry_cart, 'data-approval-status="approved"')
+        self.assertContains(retry_cart, "Book flight")
+
+    def test_confirmation_email_failure_does_not_restore_a_booked_flight(self):
+        _, flight_request, cart_item = self.submit_and_approve_flight()
+
+        with patch(
+            "demo.views.send_flight_email",
+            side_effect=RuntimeError("email unavailable"),
+        ):
+            response = self.client.post(
+                reverse("book_flight"),
+                {"cart_item_id": cart_item["id"]},
+            )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(self.client.session["booking_cart"]["items"], [])
+        flight_request.refresh_from_db()
+        self.assertIsNotNone(flight_request.booking_completed_at)
+
+    def test_failed_approved_amadeus_booking_remains_in_the_cart(self):
+        flight_data = json.loads(json.dumps(self.flight_data))
+        flight_data["source"] = "AMADEUS"
+        _, flight_request, cart_item = self.submit_and_approve_flight(flight_data)
+
+        with patch(
+            "demo.views.get_access_token",
+            side_effect=RuntimeError("provider unavailable"),
+        ), patch("demo.views.send_flight_email_2") as mock_fallback_email:
+            response = self.client.post(
+                reverse("book_flight"),
+                {"cart_item_id": cart_item["id"]},
+            )
+
+        self.assertRedirects(response, reverse("cart_detail"))
+        self.assertEqual(
+            self.client.session["booking_cart"]["items"],
+            [cart_item],
+        )
+        flight_request.refresh_from_db()
+        self.assertIsNone(flight_request.booking_completed_at)
+        mock_fallback_email.assert_not_called()
+
+    def test_successful_approved_amadeus_booking_removes_the_cart_item(self):
+        flight_data = json.loads(json.dumps(self.flight_data))
+        flight_data["source"] = "AMADEUS"
+        _, flight_request, cart_item = self.submit_and_approve_flight(flight_data)
+
+        with patch("demo.views.get_access_token", return_value="token"), patch(
+            "demo.views.amadeus.shopping.flight_offers.pricing.post"
+        ) as mock_pricing, patch("demo.views.requests.post") as mock_order, patch(
+            "demo.views.Booking.construct_booking",
+            return_value={"reference": "ORDER-123", "confirmed": "CONFIRMED"},
+        ), patch("demo.views.send_flight_email") as mock_email:
+            mock_pricing.return_value.data = {"flightOffers": [flight_data]}
+            mock_order.return_value.raise_for_status.return_value = None
+            mock_order.return_value.json.return_value = {
+                "data": {"id": "ORDER-123"},
+            }
+            response = self.client.post(
+                reverse("book_flight"),
+                {"cart_item_id": cart_item["id"]},
+            )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(self.client.session["booking_cart"]["items"], [])
+        flight_request.refresh_from_db()
+        self.assertIsNotNone(flight_request.booking_completed_at)
+        mock_order.assert_called_once()
+        mock_email.assert_called_once()
+
+    @patch("demo.views.requests.post")
+    @patch("demo.views.amadeus.shopping.flight_offers.pricing.post")
+    @patch("demo.views.get_access_token")
+    @patch("demo.views.send_flight_email_2", return_value=1)
+    def test_approved_duffel_booking_is_emailed_without_provider_order(
+        self,
+        mock_email,
+        mock_access_token,
+        mock_pricing,
+        mock_order,
+    ):
+        flight_data = json.loads(json.dumps(self.flight_data))
+        flight_data["source"] = "DUFFEL"
+        user, flight_request, cart_item = self.submit_and_approve_flight(flight_data)
+
+        response = self.client.post(
+            reverse("book_flight"),
+            {"cart_item_id": cart_item["id"]},
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertTemplateUsed(response, "demo/success_page.html")
+        self.assertContains(response, "Booking request sent!")
+        self.assertEqual(self.client.session["booking_cart"]["items"], [])
+        flight_request.refresh_from_db()
+        self.assertIsNotNone(flight_request.booking_completed_at)
+        mock_email.assert_called_once_with(
+            user,
+            "LOS",
+            "JFK",
+            "2026-07-10",
+            None,
+            "ECONOMY",
+            flight_request,
+        )
+        mock_access_token.assert_not_called()
+        mock_pricing.assert_not_called()
+        mock_order.assert_not_called()
+
+    @patch(
+        "demo.views.send_flight_email_2",
+        side_effect=RuntimeError("email unavailable"),
+    )
+    def test_failed_duffel_booking_email_remains_in_the_cart(self, mock_email):
+        flight_data = json.loads(json.dumps(self.flight_data))
+        flight_data["source"] = "DUFFEL"
+        _, flight_request, cart_item = self.submit_and_approve_flight(flight_data)
+
+        response = self.client.post(
+            reverse("book_flight"),
+            {"cart_item_id": cart_item["id"]},
+        )
+
+        self.assertRedirects(response, reverse("cart_detail"))
+        self.assertEqual(
+            self.client.session["booking_cart"]["items"],
+            [cart_item],
+        )
+        flight_request.refresh_from_db()
+        self.assertIsNone(flight_request.booking_completed_at)
+        mock_email.assert_called_once()
+
+    def test_remove_and_clear_keep_pending_flight_but_remove_saved_items(self):
+        user = self.login_staff()
+        self.client.post(
+            reverse("cart_add_flight"),
+            {"flight_data": json.dumps(self.flight_data)},
+        )
+        self.create_flight_request(user)
+        hotel_data = {
+            "offer_id": "LOCAL-HOTEL-LOS-PENDING-1",
+            "hotel_name": "Pending Trip Hotel",
+            "description": "Executive room",
+            "check_in": "2026-07-10",
+            "check_out": "2026-07-12",
+            "guests": "1",
+            "price": "250,000",
+        }
+        self.client.post(reverse("cart_add_hotel"), hotel_data)
+
+        response = self.client.get(reverse("cart_detail"))
+        pending_item = next(
+            item
+            for item in response.context["cart_items"]
+            if item["type"] == "flight"
+        )
+        saved_hotel = next(
+            item
+            for item in self.client.session["booking_cart"]["items"]
+            if item["type"] == "hotel"
+        )
+        saved_flight = next(
+            item
+            for item in self.client.session["booking_cart"]["items"]
+            if item["type"] == "flight"
+        )
+
+        self.client.post(reverse("cart_remove", args=[pending_item["id"]]))
+        response = self.client.get(reverse("cart_detail"))
+        self.assertEqual(
+            len(
+                [
+                    item
+                    for item in response.context["cart_items"]
+                    if item["type"] == "flight"
+                ]
+            ),
+            1,
+        )
+
+        self.client.post(reverse("cart_remove", args=[saved_hotel["id"]]))
+        response = self.client.get(reverse("cart_detail"))
+        self.assertEqual(
+            [item["type"] for item in response.context["cart_items"]],
+            ["flight"],
+        )
+
+        self.client.post(reverse("cart_add_hotel"), hotel_data)
+        self.client.post(reverse("cart_clear"))
+        response = self.client.get(reverse("cart_detail"))
+        self.assertEqual(
+            [item["type"] for item in response.context["cart_items"]],
+            ["flight"],
+        )
+        self.assertEqual(
+            self.client.session["booking_cart"]["items"],
+            [saved_flight],
+        )
 
 
 @override_settings(USE_LIVE_FLIGHT_API=False)
@@ -173,8 +984,8 @@ class FlightSearchTripTypeTests(TestCase):
                 "tripType": "one-way",
                 "Origin": "LOS",
                 "Destination": "JFK",
-                "Departuredate": "2026-07-10",
-                "Returndate": "2026-07-18",
+                "Departuredate": "2030-07-10",
+                "Returndate": "2030-07-18",
                 "passengerCount": "1",
                 "cabinClassTop": "economy",
             },
@@ -182,17 +993,18 @@ class FlightSearchTripTypeTests(TestCase):
 
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, 'data-trip-type="one-way"', count=18)
+        self.assertContains(response, '<div class="leg-label">Depart</div>')
         self.assertNotContains(response, '<div class="leg-label">Return</div>')
 
-    def test_round_trip_search_returns_outbound_and_return_legs(self):
+    def test_round_trip_search_returns_depart_and_return_legs(self):
         response = self.client.post(
             reverse("home"),
             {
                 "tripType": "round-trip",
                 "Origin": "LOS",
                 "Destination": "JFK",
-                "Departuredate": "2026-07-10",
-                "Returndate": "2026-07-18",
+                "Departuredate": "2030-07-10",
+                "Returndate": "2030-07-18",
                 "passengerCount": "2",
                 "cabinClassTop": "business",
             },
@@ -200,6 +1012,7 @@ class FlightSearchTripTypeTests(TestCase):
 
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, 'data-trip-type="round-trip"', count=18)
+        self.assertContains(response, '<div class="leg-label">Depart</div>')
         self.assertContains(response, '<div class="leg-label">Return</div>')
 
     def test_multi_city_search_returns_every_requested_leg(self):
@@ -209,7 +1022,7 @@ class FlightSearchTripTypeTests(TestCase):
                 "tripType": "multi-city",
                 "multi_origin": ["LOS", "ACC", "LHR"],
                 "multi_destination": ["ACC", "LHR", "JFK"],
-                "multi_date": ["2026-07-10", "2026-07-14", "2026-07-20"],
+                "multi_date": ["2030-07-10", "2030-07-14", "2030-07-20"],
                 "passengerCount": "1",
                 "cabinClassTop": "economy",
             },
@@ -227,7 +1040,7 @@ class FlightSearchTripTypeTests(TestCase):
                 "tripType": "multi-city",
                 "multi_origin": ["LOS", "ACC"],
                 "multi_destination": ["ACC", "LHR"],
-                "multi_date": ["2026-07-20", "2026-07-14"],
+                "multi_date": ["2030-07-20", "2030-07-14"],
                 "passengerCount": "1",
                 "cabinClassTop": "economy",
             },
@@ -250,17 +1063,17 @@ class FlightSearchTripTypeTests(TestCase):
                 {
                     "origin": "LOS",
                     "destination": "ACC",
-                    "departure_date": "2026-07-10",
+                    "departure_date": "2030-07-10",
                 },
                 {
                     "origin": "ACC",
                     "destination": "LHR",
-                    "departure_date": "2026-07-14",
+                    "departure_date": "2030-07-14",
                 },
                 {
                     "origin": "LHR",
                     "destination": "JFK",
-                    "departure_date": "2026-07-20",
+                    "departure_date": "2030-07-20",
                 },
             ],
             passenger_count=1,
@@ -273,11 +1086,15 @@ class FlightSearchTripTypeTests(TestCase):
             {"flight_data": json.dumps(offer)},
         )
 
-        self.assertRedirects(response, reverse("home"))
+        self.assertRedirects(response, reverse("cart_detail"))
         request = Flight_model.objects.get(user=self.user)
         self.assertEqual(request.origin, "LOS")
         self.assertEqual(request.destination, "JFK")
-        self.assertEqual(request.return_date.isoformat(), "2026-07-20")
+        self.assertEqual(request.return_date.isoformat(), "2030-07-20")
+        self.assertEqual(
+            len(self.client.session["booking_cart"]["items"]),
+            1,
+        )
         mock_pending_email.assert_called_once()
 
 
@@ -306,8 +1123,8 @@ class HotelJourneyTests(TestCase):
             reverse("hotel"),
             {
                 "Origin": "LOS",
-                "Checkindate": "2026-07-12",
-                "Checkoutdate": "2026-07-10",
+                "Checkindate": "2030-07-12",
+                "Checkoutdate": "2030-07-10",
                 "guestCount": "1",
             },
         )
@@ -321,8 +1138,8 @@ class HotelJourneyTests(TestCase):
             reverse("hotel"),
             {
                 "Origin": "LOS",
-                "Checkindate": "2026-07-10",
-                "Checkoutdate": "2026-07-12",
+                "Checkindate": "2030-07-10",
+                "Checkoutdate": "2030-07-12",
                 "guestCount": "2",
             },
         )
@@ -715,11 +1532,38 @@ class TravelAgencyFlightMappingTests(TestCase):
         self.assertRedirects(response, reverse("approve_flight"))
         flight.refresh_from_db()
         self.assertTrue(flight.approved)
+        self.assertEqual(flight.approved_by_admin, self.org_a_admin)
         mock_send_email.assert_called_once()
         self.assertEqual(
             mock_send_email.call_args.args[3],
             ["corp-staff@example.com", "managed-agency@example.com"],
         )
+
+        mock_send_email.reset_mock()
+        repeat_response = self.client.post(
+            reverse("approve_flight"),
+            {"flight_ids": [str(flight.id)]},
+        )
+        self.assertRedirects(repeat_response, reverse("approve_flight"))
+        mock_send_email.assert_not_called()
+
+    @patch("demo.views.send_html_email")
+    def test_admin_cannot_approve_another_organizations_flight(
+        self,
+        mock_send_email,
+    ):
+        self.client.force_login(self.admin.admin)
+
+        response = self.client.post(
+            reverse("approve_flight"),
+            {"flight_ids": [str(self.managed_flight.id)]},
+        )
+
+        self.assertRedirects(response, reverse("approve_flight"))
+        self.managed_flight.refresh_from_db()
+        self.assertFalse(self.managed_flight.approved)
+        self.assertIsNone(self.managed_flight.approved_by_admin)
+        mock_send_email.assert_not_called()
 
     def test_flight_admin_recipients_use_connected_organization_admins(self):
         self.assertEqual(
@@ -972,3 +1816,39 @@ class RoleGuardTests(TestCase):
         response = self.client.post(reverse("book_flight"), {"flight_data": "{}"})
 
         self.assertRedirects(response, reverse("admin_profile"))
+
+    def test_unapproved_admin_cannot_approve_flights_directly(self):
+        unapproved_user = get_user_model().objects.create_user(
+            username="guard_unapproved_admin",
+            email="guard-unapproved-admin@example.com",
+            password="password-123",
+        )
+        Admin.objects.create(
+            admin=unapproved_user,
+            organization=self.organization,
+            first_name="Pending",
+            last_name="Admin",
+            approval_status=False,
+        )
+        flight = Flight_model.objects.create(
+            user=self.staff_user,
+            requested_by_staff=self.staff,
+            organization=self.organization,
+            origin="LOS",
+            destination="JFK",
+            departure_date=date(2030, 7, 10),
+            passenger_count=1,
+            travel_class="ECONOMY",
+            price=Decimal("800000.00"),
+        )
+        self.client.force_login(unapproved_user)
+
+        response = self.client.post(
+            reverse("approve_flight"),
+            {"flight_ids": [str(flight.pk)]},
+        )
+
+        self.assertRedirects(response, reverse("home"))
+        flight.refresh_from_db()
+        self.assertFalse(flight.approved)
+        self.assertIsNone(flight.approved_by_admin)

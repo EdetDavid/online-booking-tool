@@ -2,8 +2,9 @@ from .hotel import format_price_naira
 
 
 class Room:
-    def __init__(self, rooms):
+    def __init__(self, rooms, exchange_rate=None):
         self.rooms = rooms
+        self.exchange_rate = exchange_rate
 
     def construct_room(self):
         hotel_rooms = []
@@ -14,6 +15,7 @@ class Room:
                 offer['price'] = format_price_naira(
                     price.get('total'),
                     price.get('currency', 'USD'),
+                    exchange_rate=self.exchange_rate,
                 )
                 room_info = room.get('room', {})
                 description = room_info.get('description', {}).get('text')

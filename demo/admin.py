@@ -62,6 +62,7 @@ class TravelAgencyAdmin(admin.ModelAdmin):
         "first_name",
         "last_name",
         "company_code",
+        "exchange_rate",
         "approval_status",
         "phone",
     )

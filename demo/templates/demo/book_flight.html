@@ -26,10 +26,7 @@
 </head>
 
 <body>
-  {# This file is intentionally standalone. If you have a project base template, consider changing this to:
-     {% extends 'demo/staff/base.html' %}
-     {% block content %} ... {% endblock %}
-     #}
+  {# This booking confirmation is intentionally a standalone page. #}
 
   <div class="container">
 
@@ -58,7 +55,7 @@
                 <p>Status: <strong class="text-danger">{{ r.confirmed }}</strong></p>
                 <p>Booking Reference: <strong class="text-danger">{{ r.reference }}</strong></p>
                 <p>Document Issued At: <strong>{{ r.created }}</strong></p>
-                <p>Price: <span class="price">${{ r.price }}</span></p>
+                <p>Price: <span class="price">&#8358;{{ r.price }}</span></p>
 
                 {% if r.0firstFlightDepartureDate %}
                   <div class="card mt-3">

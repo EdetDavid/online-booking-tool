@@ -148,8 +148,10 @@
             <i class="fas fa-check-circle"></i>Approve Admin</a>
         <a class="my-2 {% if request.resolver_match.url_name == 'travel_agency_peer_approval_view' %}active{% endif %}" href="{% url 'travel_agency_peer_approval_view' %}">
             <i class="fas fa-user-check"></i>Approve Travel Agency</a>
-            <a class="my-2 {% if request.resolver_match.url_name == 'update_price_increment' %}active{% endif %}" href="{% url 'update_price_increment' %}">
-                <i class="fas fa-dollar-sign"></i>Mark Up</a>
+             <a class="my-2 {% if request.resolver_match.url_name == 'update_price_increment' %}active{% endif %}" href="{% url 'update_price_increment' %}">
+                 <i class="fas fa-dollar-sign"></i>Mark Up</a>
+        <a class="my-2 {% if request.resolver_match.url_name == 'update_exchange_rate' %}active{% endif %}" href="{% url 'update_exchange_rate' %}">
+            <i class="fas fa-money-bill-transfer"></i>Exchange Rate</a>
             
         <a class="my-2 {% if request.resolver_match.url_name == 'travel_agency_report' %}active{% endif %}" href="{% url 'travel_agency_report' %}">
             <i class="fas fa-chart-line"></i>Reports</a>

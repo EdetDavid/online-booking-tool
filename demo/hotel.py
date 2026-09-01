@@ -1,23 +1,30 @@
-from decimal import Decimal, InvalidOperation
+from decimal import Decimal
 
 import geocoder
 
 from .models import PriceIncrement
-
-
-NAIRA_PER_HOTEL_PRICE_UNIT = Decimal('1600')
+from .pricing import currency_amount_in_naira
 
 
 class Hotel:
-    def __init__(self, hotel):
+    def __init__(self, hotel, exchange_rate=None):
         self.hotel = hotel
+        self.exchange_rate = exchange_rate
 
     def construct_hotel(self):
         offer = {}
         try:
             price = self.hotel['offers'][0]['price']
-            price_value = price_value_naira(price.get('total'), price.get('currency', 'USD'))
-            offer['price'] = format_price_naira(price.get('total'), price.get('currency', 'USD'))
+            price_value = price_value_naira(
+                price.get('total'),
+                price.get('currency', 'USD'),
+                exchange_rate=self.exchange_rate,
+            )
+            offer['price'] = format_price_naira(
+                price.get('total'),
+                price.get('currency', 'USD'),
+                exchange_rate=self.exchange_rate,
+            )
             offer['price_value'] = price_value
             offer['name'] = self.hotel['hotel']['name']
             offer['hotelID'] = self.hotel['hotel']['hotelId']
@@ -57,20 +64,13 @@ def get_hotel_address(hotel_info):
     return ''
 
 
-def format_price_naira(amount, currency='USD'):
-    return f'{price_value_naira(amount, currency).quantize(Decimal("1")):,}'
+def format_price_naira(amount, currency='USD', exchange_rate=None, markup=None):
+    return f'{price_value_naira(amount, currency, exchange_rate, markup).quantize(Decimal("1")):,}'
 
 
-def price_value_naira(amount, currency='USD'):
-    try:
-        value = Decimal(str(amount).replace(',', ''))
-    except (InvalidOperation, TypeError, AttributeError):
-        value = Decimal('0')
-
-    if str(currency or '').upper() not in {'NGN', 'N', 'NAIRA'}:
-        value *= NAIRA_PER_HOTEL_PRICE_UNIT
-
-    value += get_hotel_markup()
+def price_value_naira(amount, currency='USD', exchange_rate=None, markup=None):
+    value = currency_amount_in_naira(amount, currency, exchange_rate)
+    value += get_hotel_markup() if markup is None else Decimal(str(markup or 0))
     return value
 
 

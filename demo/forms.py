@@ -290,3 +290,25 @@ class TravelAgencyOrganizationForm(forms.ModelForm):
         if queryset.exists():
             raise forms.ValidationError("This organization code is already in use.")
         return join_code
+
+
+class ExchangeRateForm(forms.ModelForm):
+    class Meta:
+        model = TravelAgency
+        fields = ["exchange_rate"]
+        labels = {
+            "exchange_rate": "USD to NGN exchange rate",
+        }
+        help_texts = {
+            "exchange_rate": "Enter the naira value of one US dollar.",
+        }
+        widgets = {
+            "exchange_rate": forms.NumberInput(
+                attrs={
+                    "class": "form-control",
+                    "min": "0.0001",
+                    "step": "0.0001",
+                    "inputmode": "decimal",
+                }
+            ),
+        }

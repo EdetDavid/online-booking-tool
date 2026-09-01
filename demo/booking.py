@@ -1,10 +1,13 @@
 import re
 from datetime import datetime
-from .models import PriceIncrement  # Ensure this import is available
+from .flight import flight_price_naira
+from .models import PriceIncrement
 
 class Booking:
-    def __init__(self, flight):
+    def __init__(self, flight, exchange_rate=None, confirmed_price=None):
         self.flight = flight
+        self.exchange_rate = exchange_rate
+        self.confirmed_price = confirmed_price
 
     def construct_booking(self):
         # Get the price increment from the model
@@ -17,7 +20,16 @@ class Booking:
 
         offer = {}
         index = 0
-        offer['price'] = float(self.flight['flightOffers'][0]['price']['total']) * 1600 + increment_value   # Increment price dynamically
+        calculated_price = flight_price_naira(
+            self.flight['flightOffers'][0],
+            increment_value,
+            exchange_rate=self.exchange_rate,
+        )
+        offer['price'] = float(
+            self.confirmed_price
+            if self.confirmed_price is not None
+            else calculated_price
+        )
         offer['created'] = keep_date_remove_time(self.flight['associatedRecords'][0]['creationDate'])
         offer['reference'] = self.flight['associatedRecords'][0]['reference']
         offer['confirmed'] = self.flight['ticketingAgreement']['option']

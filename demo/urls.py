@@ -56,6 +56,8 @@ urlpatterns = [
     path('approved-flights/', views.approved_flights, name='approved_flights'),
     path('update-price/', views.update_price_increment,
          name='update_price_increment'),
+    path('travel-agency/exchange-rate/', views.update_exchange_rate,
+         name='update_exchange_rate'),
 
     #     Hotel Urls
 

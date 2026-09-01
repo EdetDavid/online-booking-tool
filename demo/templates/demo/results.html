@@ -155,7 +155,12 @@
                                             {% endwith %}
                                             <strong>{{ r.0firstFlightAirline }}</strong>
                                             <span>{{ r.airlines }}</span>
-                                            {% if r.source == 'LIVE_FLIGHT_API' %}
+                                            {% if r.operating_carriers %}
+                                                <span>Operated by {{ r.operating_carriers }}</span>
+                                            {% endif %}
+                                            {% if r.source == 'DUFFEL' %}
+                                                <em>Live Duffel fare</em>
+                                            {% elif r.source == 'LIVE_FLIGHT_API' %}
                                                 <em>Live fare</em>
                                             {% elif r.source == 'MULTI_CITY_LOCAL_FARE' %}
                                                 <em>Multi-city fare</em>
@@ -195,7 +200,7 @@
                                                     </div>
                                                     <div class="segment-list">
                                                         {% for segment in leg.segments %}
-                                                            <span>{{ segment.airline }}: {{ segment.origin }} to {{ segment.destination }}</span>
+                                                            <span>{{ segment.operating_carrier_name }} ({{ segment.airline }}): {{ segment.origin }} to {{ segment.destination }}</span>
                                                         {% endfor %}
                                                     </div>
                                                 </div>

@@ -4,9 +4,8 @@ from decimal import Decimal
 from types import SimpleNamespace
 
 from .models import LocalFlightFare, PriceIncrement
+from .flight import flight_price_naira
 
-
-NAIRA_PER_USD = Decimal('1600')
 LOCAL_FARE_SOURCES = {
     'LOCAL_FARE_DB',
     'SYNTHETIC_FARE_DB',
@@ -648,7 +647,7 @@ def local_multi_city_search(legs, passenger_count=1, cabin='ECONOMY', max_offers
                     for offer in selected_offers
                 ),
                 'price': {
-                    'currency': 'USD',
+                    'currency': 'NGN',
                     'total': f'{total:.2f}',
                 },
                 'travelerPricings': selected_offers[0].get('travelerPricings', []),
@@ -726,7 +725,7 @@ def airport_search_text(code, label):
 
 
 def build_local_offer(fare, departure_date, return_date, passenger_count, requested_origin=None, requested_destination=None, reverse_route=False):
-    price_usd_equivalent = (Decimal(fare.base_price_naira) * passenger_count) / NAIRA_PER_USD
+    price_naira = Decimal(fare.base_price_naira) * passenger_count
     outbound_origin = requested_origin or fare.origin
     outbound_destination = requested_destination or fare.destination
     return_origin = outbound_destination
@@ -747,8 +746,8 @@ def build_local_offer(fare, departure_date, return_date, passenger_count, reques
         'source': 'LOCAL_FARE_DB',
         'numberOfBookableSeats': fare.seats_available,
         'price': {
-            'currency': 'USD',
-            'total': f'{price_usd_equivalent:.2f}',
+            'currency': 'NGN',
+            'total': f'{price_naira:.2f}',
         },
         'travelerPricings': [
             {
@@ -1059,10 +1058,23 @@ def combine_date_time(date_value, time_value, hour_offset=0, minute_offset=0):
     return dt_value.strftime('%Y-%m-%dT%H:%M:%S')
 
 
-def local_booking_confirmation(user, flight_data):
+def local_booking_confirmation(
+    user,
+    flight_data,
+    exchange_rate=None,
+    confirmed_price=None,
+):
     increment = PriceIncrement.objects.first()
-    increment_value = Decimal(increment.increment_value if increment else 0)
-    price = Decimal(str(flight_data['price']['total'])) * NAIRA_PER_USD + increment_value
+    increment_value = increment.increment_value if increment else 0
+    price = (
+        Decimal(str(confirmed_price))
+        if confirmed_price is not None
+        else flight_price_naira(
+            flight_data,
+            increment_value,
+            exchange_rate=exchange_rate,
+        )
+    )
     first_segment = flight_data['itineraries'][0]['segments'][0]
 
     confirmation = {

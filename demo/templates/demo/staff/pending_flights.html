@@ -45,6 +45,7 @@
                     <th>Return Date</th>
                     <th>Travel Class</th>
                     <th>Price</th>
+                    <th>Status</th>
                 </tr>
             </thead>
             <tbody>
@@ -56,10 +57,11 @@
                         <td data-label="Return Date">{{ flight.return_date }}</td>
                         <td data-label="Travel Class">{{ flight.travel_class }}</td>
                         <td data-label="Price">₦ {{ flight.price|floatformat:0|intcomma }}</td>
+                        <td data-label="Status"><span class="badge badge-warning">Pending approval</span></td>
                     </tr>
                 {% empty %}
                     <tr>
-                        <td colspan="6" style="text-align: center; padding: 20px; font-size: 14px">No pending flights</td>
+                        <td colspan="7" style="text-align: center; padding: 20px; font-size: 14px">No flights pending approval</td>
                     </tr>
                 {% endfor %}
             </tbody>

@@ -1,11 +1,14 @@
 import re
 from datetime import datetime
+from decimal import Decimal
 
 from .models import PriceIncrement
+from .pricing import currency_amount_in_naira
 
 class Flight:
-    def __init__(self, flight):
+    def __init__(self, flight, exchange_rate=None):
         self.flight = flight
+        self.exchange_rate = exchange_rate
 
     def construct_flights(self):
         # Get the price increment from the model
@@ -18,7 +21,13 @@ class Flight:
 
         offer = {}
         index = 0
-        offer['price'] = float(self.flight['price']['total']) * 1600 + increment_value  # Increment price dynamically
+        offer['price'] = float(
+            flight_price_naira(
+                self.flight,
+                increment_value,
+                exchange_rate=self.exchange_rate,
+            )
+        )
         offer['id'] = self.flight['id']
         offer['source'] = self.flight.get('source', 'LIVE_FLIGHT_API')
         offer['seats'] = self.flight.get('numberOfBookableSeats', 0)
@@ -32,15 +41,19 @@ class Flight:
         offer['stops'] = 0
         offer['legs'] = []
         airlines = []
+        operating_carriers = []
 
         for f in self.flight['itineraries']:
-            # Keys starting from 0 correspond to Outbound flights and the keys starting from 1 to Return flights
+            # Keys starting from 0 correspond to departing flights and the keys starting from 1 to return flights
             segments = self.flight['itineraries'][index]['segments']
             offer['stops'] += max(len(segments) - 1, 0)
             for segment in segments:
                 carrier = segment.get('carrierCode')
                 if carrier and carrier not in airlines:
                     airlines.append(carrier)
+                carrier_name = segment.get('operatingCarrierName') or carrier
+                if carrier_name and carrier_name not in operating_carriers:
+                    operating_carriers.append(carrier_name)
 
             first_segment = segments[0]
             last_segment = segments[-1]
@@ -63,6 +76,10 @@ class Flight:
                     'segments': [
                         {
                             'airline': segment.get('carrierCode', ''),
+                            'operating_carrier_name': segment.get(
+                                'operatingCarrierName',
+                                segment.get('carrierCode', ''),
+                            ),
                             'origin': segment.get('departure', {}).get('iataCode', ''),
                             'destination': segment.get('arrival', {}).get('iataCode', ''),
                         }
@@ -104,11 +121,26 @@ class Flight:
             index += 1
 
         offer['airlines'] = ' '.join(airlines)
+        offer['operating_carriers'] = ', '.join(operating_carriers)
         return offer
 
 
 def get_airline_logo(carrier_code):
     return "https://s1.apideeplink.com/images/airlines/" + carrier_code + ".png"
+
+
+def flight_price_naira(flight, markup=None, exchange_rate=None):
+    price = flight.get('price') or {}
+    value = currency_amount_in_naira(
+        price.get('total', '0'),
+        price.get('currency', 'USD'),
+        exchange_rate,
+    )
+
+    if markup is None:
+        increment = PriceIncrement.objects.first()
+        markup = increment.increment_value if increment else 0
+    return value + Decimal(str(markup or 0))
 
 
 def get_hour(date_time):
@@ -124,10 +156,10 @@ def get_cabin(flight):
 
 def leg_label(trip_type, index):
     if trip_type == 'round-trip':
-        return 'Outbound' if index == 0 else 'Return'
+        return 'Depart' if index == 0 else 'Return'
     if trip_type == 'multi-city':
         return f'Flight {index + 1}'
-    return 'Departure'
+    return 'Depart'
 
 
 def get_stoptime(total_duration, first_flight_duration, second_flight_duration):

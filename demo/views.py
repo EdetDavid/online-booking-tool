@@ -12,23 +12,31 @@ import xlwt
 import logging
 import requests
 from datetime import datetime
+from decimal import Decimal, InvalidOperation
 from functools import wraps
 from amadeus import Client, ResponseError, Location
 from django.shortcuts import render, redirect, get_object_or_404
 from django.contrib import messages
 from django.urls import reverse
 from django.utils.http import url_has_allowed_host_and_scheme
+from django.utils import timezone
 from django.views.decorators.cache import never_cache
-from .flight import Flight
+from .flight import Flight, flight_price_naira
+from .duffel import DuffelAPIError, airport_suggestions, search_flights as duffel_flight_search
 from .booking import Booking
 from .cart import (
     add_flight as add_flight_to_cart,
     add_hotel as add_hotel_to_cart,
+    cart_count,
+    cart_item_is_submitted,
     cart_items,
     cart_total_naira,
     clear_cart,
+    flight_cart_state_counts,
     get_cart_item,
+    has_removable_cart_items,
     remove_item as remove_cart_item,
+    visible_cart_items,
 )
 from .hotel import Hotel, format_price_naira
 from .room import Room
@@ -54,6 +62,7 @@ from .local_hotels import (
     normalize_city_code,
 )
 from .models import Admin, Staff, Profile, Flight_model, PriceIncrement, Organization, TravelAgency
+from .pricing import exchange_rate_for_agency, exchange_rate_for_user
 from .role_email import (
     role_recipients,
     send_html_email,
@@ -62,6 +71,7 @@ from django.http import HttpResponse
 from django.contrib.auth.decorators import login_required
 from .forms import (
     AdminUserCreationForm,
+    ExchangeRateForm,
     StaffUserCreationForm,
     ProfileForm,
     StandardAuthenticationForm,
@@ -74,7 +84,11 @@ from django.contrib.auth import login as auth_login, logout as auth_logout, auth
 logger = logging.getLogger(__name__)
 
 
-amadeus = Client()
+amadeus = Client(
+    client_id=settings.AMADEUS_CLIENT_ID or None,
+    client_secret=settings.AMADEUS_CLIENT_SECRET or None,
+    hostname=settings.AMADEUS_HOSTNAME,
+)
 
 
 def csrf_failure(request, reason=""):
@@ -101,7 +115,10 @@ def staff_profile_for_user(user):
 def admin_profile_for_user(user):
     if not user.is_authenticated:
         return None
-    return Admin.objects.select_related('organization').filter(admin=user).first()
+    return Admin.objects.select_related('organization').filter(
+        admin=user,
+        approval_status=True,
+    ).first()
 
 
 def travel_agency_profile_for_user(user):
@@ -294,23 +311,26 @@ def coming_soon(request):
 def approve_flight(request):
     admin_profile = admin_profile_for_user(request.user)
 
+    pending_flights = Flight_model.objects.filter(approved=False)
+    if admin_profile.organization_id:
+        pending_flights = pending_flights.filter(
+            organization=admin_profile.organization)
+
     if request.method == 'POST':
         # Get selected flights
         flight_ids = request.POST.getlist('flight_ids')
 
         if flight_ids:
-            flights = Flight_model.objects.filter(id__in=flight_ids)
-            if admin_profile and admin_profile.organization_id:
-                flights = flights.filter(
-                    organization=admin_profile.organization)
+            flights = pending_flights.filter(id__in=flight_ids)
 
             for flight in flights:
                 flight.approved = True
-                if admin_profile:
-                    flight.approved_by_admin = admin_profile
-                    if not flight.assigned_admin_id:
-                        flight.assigned_admin = admin_profile
-                flight.save()
+                flight.approved_by_admin = admin_profile
+                update_fields = ['approved', 'approved_by_admin']
+                if not flight.assigned_admin_id:
+                    flight.assigned_admin = admin_profile
+                    update_fields.append('assigned_admin')
+                flight.save(update_fields=update_fields)
                 messages.success(
                     request, f'Flight {flight.origin} to {flight.destination} on {flight.departure_date} has been approved.')
 
@@ -318,11 +338,6 @@ def approve_flight(request):
 
             return redirect('approve_flight')
 
-    # Fetch all flights where approval status is False
-    pending_flights = Flight_model.objects.filter(approved=False)
-    if admin_profile and admin_profile.organization_id:
-        pending_flights = pending_flights.filter(
-            organization=admin_profile.organization)
     return render(request, 'demo/admin/approve_flight.html', {'pending_flights': pending_flights})
 
 
@@ -426,7 +441,7 @@ def export_combined_to_csv(flights, staff_members, admins):
             flight.travel_class,
             flight.departure_date,
             flight.return_date,
-            'Approved' if flight.approved else 'Unapproved'
+            'Approved' if flight.approved else 'Pending approval'
         ])
 
     writer.writerow([])
@@ -488,7 +503,7 @@ def export_combined_to_excel(flights, staff_members, admins):
         ws.write(row, 7, flight.departure_date.strftime('%Y-%m-%d'))
         ws.write(row, 8, flight.return_date.strftime(
             '%Y-%m-%d') if flight.return_date else '')
-        ws.write(row, 9, 'Approved' if flight.approved else 'Unapproved')
+        ws.write(row, 9, 'Approved' if flight.approved else 'Pending approval')
         row += 1
 
     ws.write(row, 0, 'Staff Report')
@@ -709,6 +724,23 @@ def update_price_increment(request):
     return render(request, 'demo/travel_agency/update_price.html', {'increment_value': increment.increment_value})
 
 
+@travel_agency_required
+def update_exchange_rate(request):
+    agency = travel_agency_profile_for_user(request.user)
+    form = ExchangeRateForm(request.POST or None, instance=agency)
+
+    if request.method == "POST" and form.is_valid():
+        form.save()
+        messages.success(request, "Exchange rate updated successfully.")
+        return redirect("update_exchange_rate")
+
+    return render(
+        request,
+        "demo/travel_agency/update_exchange_rate.html",
+        {"form": form},
+    )
+
+
 def demo(request):
     if request.method != "POST":
         return render(
@@ -734,16 +766,33 @@ def demo(request):
                 flight_search_form_context(request.POST, legs),
             )
 
-        raw_flights = local_multi_city_search(
-            legs=legs,
-            passenger_count=passenger_count,
-            cabin=cabin_class,
-            max_offers=getattr(settings, "MIN_FLIGHT_RESULTS", 18),
-        )
-        messages.info(
-            request,
-            "Showing multi-city itinerary combinations with locally priced fares.",
-        )
+        raw_flights = []
+        live_provider_reachable = False
+        if (
+            getattr(settings, "USE_LIVE_FLIGHT_API", True)
+            and settings.FLIGHT_SEARCH_PROVIDER == "duffel"
+        ):
+            try:
+                raw_flights = duffel_flight_search(
+                    legs=legs,
+                    passenger_count=passenger_count,
+                    cabin=cabin_class,
+                )
+                live_provider_reachable = True
+            except DuffelAPIError as error:
+                logger.warning("Duffel multi-city search unavailable: %s", error)
+        if not live_provider_reachable:
+            raw_flights = local_multi_city_search(
+                legs=legs,
+                passenger_count=passenger_count,
+                cabin=cabin_class,
+                max_offers=getattr(settings, "MIN_FLIGHT_RESULTS", 18),
+            )
+            if raw_flights:
+                messages.info(
+                    request,
+                    "Showing locally priced multi-city fares while live pricing is unavailable.",
+                )
         origin = legs[0]["origin"]
         destination = legs[-1]["destination"]
         departure_date = legs[0]["departure_date"]
@@ -787,23 +836,45 @@ def demo(request):
         if return_date:
             kwargs["returnDate"] = return_date
 
-        search_flights = None
+        raw_flights = []
+        live_provider_reachable = False
         trip_purpose = ""
         live_flight_api_enabled = getattr(
             settings, "USE_LIVE_FLIGHT_API", True
         )
         if live_flight_api_enabled:
             try:
-                search_flights = amadeus.shopping.flight_offers_search.get(
-                    **kwargs
-                )
+                if settings.FLIGHT_SEARCH_PROVIDER == "duffel":
+                    search_legs = [{
+                        "origin": origin,
+                        "destination": destination,
+                        "departure_date": departure_date,
+                    }]
+                    if return_date:
+                        search_legs.append({
+                            "origin": destination,
+                            "destination": origin,
+                            "departure_date": return_date,
+                        })
+                    raw_flights = duffel_flight_search(
+                        legs=search_legs,
+                        passenger_count=passenger_count,
+                        cabin=cabin_class,
+                    )
+                else:
+                    search_flights = amadeus.shopping.flight_offers_search.get(
+                        **kwargs
+                    )
+                    raw_flights = list(search_flights.data)
+                live_provider_reachable = True
             except Exception as error:
                 logger.warning(
-                    "Amadeus flight search unavailable, using local fares: %s",
+                    "%s flight search unavailable, using local fares: %s",
+                    settings.FLIGHT_SEARCH_PROVIDER.title(),
                     error,
                 )
 
-        if return_date and live_flight_api_enabled:
+        if return_date and live_flight_api_enabled and settings.FLIGHT_SEARCH_PROVIDER == "amadeus":
             try:
                 trip_purpose_response = (
                     amadeus.travel.predictions.trip_purpose.get(
@@ -817,10 +888,8 @@ def demo(request):
             except Exception as error:
                 logger.warning("Trip purpose lookup unavailable: %s", error)
 
-        raw_flights = list(search_flights.data) if search_flights else []
-        minimum_results = getattr(settings, "MIN_FLIGHT_RESULTS", 18)
-        if len(raw_flights) < minimum_results:
-            local_fares = local_flight_search(
+        if not live_provider_reachable:
+            raw_flights = local_flight_search(
                 origin=origin,
                 destination=destination,
                 departure_date=departure_date,
@@ -828,18 +897,10 @@ def demo(request):
                 passenger_count=passenger_count,
                 cabin=cabin_class,
             )
-            raw_flights.extend(
-                local_fares[:max(minimum_results - len(raw_flights), 0)]
-            )
-            if local_fares and not search_flights:
+            if raw_flights:
                 messages.info(
                     request,
                     "Showing locally priced fares while live airline pricing is unavailable.",
-                )
-            elif local_fares:
-                messages.info(
-                    request,
-                    "Showing additional local fare options for this route.",
                 )
         route_title = f"{origin} to {destination}"
         route_subtitle = ""
@@ -847,8 +908,10 @@ def demo(request):
     for flight in raw_flights:
         flight["tripType"] = trip_type
 
+    exchange_rate = exchange_rate_for_user(request.user)
     search_flights_returned = [
-        Flight(flight).construct_flights() for flight in raw_flights
+        Flight(flight, exchange_rate=exchange_rate).construct_flights()
+        for flight in raw_flights
     ]
     if not search_flights_returned:
         messages.info(request, "No flight itinerary was found for this trip.")
@@ -984,12 +1047,18 @@ def flight_search_form_context(post_data=None, multi_legs=None):
 
 
 def cart_detail(request):
+    items = visible_cart_items(request)
+    flight_status_counts = flight_cart_state_counts(request, items)
     return render(
         request,
         "demo/cart.html",
         {
-            "cart_items": cart_items(request),
-            "cart_total": cart_total_naira(request),
+            "cart_items": items,
+            "cart_total": cart_total_naira(request, items),
+            "flight_status_counts": flight_status_counts,
+            "flight_cart_count": sum(flight_status_counts.values()),
+            "pending_cart_count": flight_status_counts["pending"],
+            "has_removable_cart_items": has_removable_cart_items(request),
         },
     )
 
@@ -1018,17 +1087,44 @@ def cart_add_hotel(request):
         return redirect("hotel")
 
     try:
+        offer_id = request.POST.get("offer_id")
+        hotel_data = {
+            "offer_id": offer_id,
+            "hotel_name": request.POST.get("hotel_name"),
+            "description": request.POST.get("description"),
+            "check_in": request.POST.get("check_in"),
+            "check_out": request.POST.get("check_out"),
+            "guests": request.POST.get("guests"),
+            "price": request.POST.get("price"),
+            "price_verified": False,
+        }
+        if (
+            is_local_hotel_offer_id(offer_id)
+            and request.user.is_authenticated
+        ):
+            hotel_details = local_hotel_offer(offer_id)
+            offer = hotel_details["offers"][0]
+            room = offer.get("room", {})
+            hotel_data.update({
+                "hotel_name": hotel_details.get("hotel", {}).get(
+                    "name",
+                    "Hotel stay",
+                ),
+                "description": room.get("description", {}).get("text")
+                or room.get("type", "Hotel room"),
+                "check_in": offer.get("checkInDate", ""),
+                "check_out": offer.get("checkOutDate", ""),
+                "guests": offer.get("guests", {}).get("adults", 1),
+                "price": format_price_naira(
+                    offer.get("price", {}).get("total", "0"),
+                    offer.get("price", {}).get("currency", "USD"),
+                    exchange_rate=exchange_rate_for_user(request.user),
+                ),
+                "price_verified": True,
+            })
         added = add_hotel_to_cart(
             request,
-            {
-                "offer_id": request.POST.get("offer_id"),
-                "hotel_name": request.POST.get("hotel_name"),
-                "description": request.POST.get("description"),
-                "check_in": request.POST.get("check_in"),
-                "check_out": request.POST.get("check_out"),
-                "guests": request.POST.get("guests"),
-                "price": request.POST.get("price"),
-            },
+            hotel_data,
         )
         if added:
             messages.success(request, "Hotel room added to your cart.")
@@ -1043,7 +1139,12 @@ def cart_add_hotel(request):
 
 def cart_remove(request, item_id):
     if request.method == "POST":
-        if remove_cart_item(request, item_id):
+        if cart_item_is_submitted(request, item_id):
+            messages.info(
+                request,
+                "Submitted flight requests remain in your cart until booking is complete.",
+            )
+        elif remove_cart_item(request, item_id):
             messages.success(request, "Item removed from your cart.")
         else:
             messages.info(request, "That item is no longer in your cart.")
@@ -1053,7 +1154,16 @@ def cart_remove(request, item_id):
 def cart_clear(request):
     if request.method == "POST":
         if clear_cart(request):
-            messages.success(request, "Your cart has been cleared.")
+            messages.success(request, "Your saved cart items have been cleared.")
+        elif any(
+            item.get("type") == "flight"
+            and item.get("cart_state") in {"pending", "approved"}
+            for item in visible_cart_items(request)
+        ):
+            messages.info(
+                request,
+                "Submitted flight requests remain in your cart until booking is complete.",
+            )
         else:
             messages.info(request, "Your cart is already empty.")
     return redirect("cart_detail")
@@ -1109,6 +1219,17 @@ def get_access_token():
         raise Exception(f"Failed to get access token: {str(e)}")
 
 
+def complete_flight_booking(request, flight_request, cart_item_id=None):
+    flight_request.booking_completed_at = timezone.now()
+    flight_request.save(update_fields=["booking_completed_at"])
+    if cart_item_id:
+        remove_cart_item(
+            request,
+            cart_item_id,
+            allow_submitted=True,
+        )
+
+
 @staff_required
 def book_flight(request):
     if request.method != 'POST':
@@ -1118,6 +1239,7 @@ def book_flight(request):
     try:
         # Get flight data from POST
         cart_item_id = request.POST.get('cart_item_id')
+        cart_item = None
         flight = request.POST.get('flight_data')
         if cart_item_id and not flight:
             cart_item = get_cart_item(request, cart_item_id)
@@ -1159,28 +1281,59 @@ def book_flight(request):
             'T')[0] if trip_type in {'round-trip', 'multi-city'} and len(flight_data['itineraries']) > 1 else None
         passenger_count = len(flight_data['travelerPricings'])
         travel_class = flight_data['travelerPricings'][0]['fareDetailsBySegment'][0]['cabin']
-        price = float(flight_data['price']['total'])
-
-        # Match the total shown in search results and the cart.
-        increment = PriceIncrement.objects.first()
-        markup = float(increment.increment_value or 0) if increment else 0
-        price_in_local_currency = (price * 1600) + markup
         staff_profile = staff_profile_for_user(request.user)
         organization = staff_profile.organization if staff_profile else None
         travel_agency = organization.travel_agency if organization else None
+        exchange_rate = exchange_rate_for_agency(travel_agency)
+        price_in_local_currency = float(
+            flight_price_naira(
+                flight_data,
+                exchange_rate=exchange_rate,
+            )
+        )
+        if cart_item and cart_item.get('cart_state') in {'pending', 'approved'}:
+            quoted_price = cart_item.get('summary', {}).get('price')
+            try:
+                price_in_local_currency = float(
+                    Decimal(str(quoted_price).replace(',', ''))
+                )
+            except (InvalidOperation, TypeError, ValueError, AttributeError):
+                pass
         assigned_admin = first_organization_admin(organization)
 
-        # Check if the flight already exists
-        existing_flight = Flight_model.objects.filter(
+        user_requests = Flight_model.objects.filter(
             user=request.user,
+            booking_completed_at__isnull=True,
+        )
+        request_matches = user_requests.filter(
             origin=origin,
             destination=destination,
             departure_date=departure_date,
             return_date=return_date if return_date else None,
             passenger_count=passenger_count,
-            travel_class=travel_class,
-            price=price_in_local_currency
-        ).first()
+            travel_class__iexact=travel_class,
+            price=price_in_local_currency,
+        )
+
+        linked_request_id = (
+            cart_item.get('flight_request_id') if cart_item else None
+        )
+        if linked_request_id:
+            existing_flight = user_requests.filter(
+                pk=linked_request_id,
+            ).first()
+            if not existing_flight:
+                messages.error(
+                    request,
+                    "The approval record for this cart item is no longer valid.",
+                )
+                return redirect('cart_detail')
+        else:
+            # A previous approval for an identical itinerary must never approve a
+            # new request. Only reuse the user's still-pending request.
+            existing_flight = request_matches.filter(
+                approved=False,
+            ).order_by('-pk').first()
 
         # If the flight doesn't exist, create it
         if not existing_flight:
@@ -1196,7 +1349,8 @@ def book_flight(request):
                 return_date=return_date if return_date else None,
                 passenger_count=passenger_count,
                 travel_class=travel_class,
-                price=price_in_local_currency
+                price=price_in_local_currency,
+                booking_payload=flight_data,
             )
         else:
             flight_request = existing_flight
@@ -1213,6 +1367,9 @@ def book_flight(request):
             if assigned_admin and not flight_request.assigned_admin_id:
                 flight_request.assigned_admin = assigned_admin
                 changed_fields.append('assigned_admin')
+            if flight_request.booking_payload != flight_data:
+                flight_request.booking_payload = flight_data
+                changed_fields.append('booking_payload')
             if changed_fields:
                 flight_request.save(update_fields=changed_fields)
 
@@ -1220,18 +1377,9 @@ def book_flight(request):
               f"passenger_count={passenger_count}, travel_class={travel_class}, "
               f"origin={origin}, destination={destination}")
 
-        # Find approved flights for any user matching the criteria
-        approved_flights = Flight_model.objects.filter(
-            user=request.user,
-            origin=origin,
-            destination=destination,
-            departure_date=departure_date,
-            return_date=return_date,
-            passenger_count=passenger_count,
-            travel_class__iexact=travel_class,
-            price=price_in_local_currency,
-            approved=True
-        )
+        # Booking is authorized only by the exact request linked to this cart
+        # item, never by another approved request with matching itinerary data.
+        approved_flights = [flight_request] if flight_request.approved else []
 
         if approved_flights:
             for approved_flight in approved_flights:
@@ -1239,21 +1387,90 @@ def book_flight(request):
 
                 if flight_data.get('source') in LOCAL_FARE_SOURCES:
                     passenger_name_record = [
-                        local_booking_confirmation(user, flight_data)
+                        local_booking_confirmation(
+                            user,
+                            flight_data,
+                            exchange_rate=exchange_rate,
+                            confirmed_price=approved_flight.price,
+                        )
                     ]
-                    send_flight_email(
-                        user,
-                        origin,
-                        destination,
-                        departure_date,
-                        return_date,
-                        passenger_name_record,
-                        travel_class,
-                        approved_flight
+                    complete_flight_booking(
+                        request,
+                        approved_flight,
+                        cart_item_id,
                     )
-                    if cart_item_id:
-                        remove_cart_item(request, cart_item_id)
+                    try:
+                        send_flight_email(
+                            user,
+                            origin,
+                            destination,
+                            departure_date,
+                            return_date,
+                            passenger_name_record,
+                            travel_class,
+                            approved_flight
+                        )
+                    except Exception as email_error:
+                        logger.exception(
+                            "Flight %s was booked but its confirmation email failed: %s",
+                            approved_flight.pk,
+                            email_error,
+                        )
+                        messages.warning(
+                            request,
+                            "Your flight was booked, but we could not send the confirmation email.",
+                        )
                     return render(request, "demo/book_flight.html", {"response": passenger_name_record})
+
+                if flight_data.get('source') == 'DUFFEL':
+                    try:
+                        emails_sent = send_flight_email_2(
+                            user,
+                            origin,
+                            destination,
+                            departure_date,
+                            return_date,
+                            travel_class,
+                            approved_flight,
+                        )
+                        if not emails_sent:
+                            raise RuntimeError(
+                                "No booking email recipient is configured."
+                            )
+                    except Exception as email_error:
+                        logger.exception(
+                            "Could not email approved Duffel flight %s for user %s: %s",
+                            approved_flight.pk,
+                            user.username,
+                            email_error,
+                        )
+                        messages.error(
+                            request,
+                            "We could not send this booking request. "
+                            "Your approved flight remains in the cart so you can try again.",
+                        )
+                        return redirect('cart_detail')
+
+                    complete_flight_booking(
+                        request,
+                        approved_flight,
+                        cart_item_id,
+                    )
+                    return render(
+                        request,
+                        "demo/success_page.html",
+                        {
+                            "user": user,
+                            "page_title": "Flight Booking Request Sent",
+                            "booking_title": "Booking request sent!",
+                            "booking_message": (
+                                "Your approved flight details have been emailed "
+                                "to the booking team."
+                            ),
+                            "button_text": "Go to Home",
+                            "cart_count": cart_count(request),
+                        },
+                    )
 
                 # Proceed with booking logic using the current user data
                 try:
@@ -1309,39 +1526,83 @@ def book_flight(request):
 
                         order = response.json()["data"]
                         passenger_name_record = [
-                            Booking(order).construct_booking()]
+                            Booking(
+                                order,
+                                exchange_rate=exchange_rate,
+                                confirmed_price=approved_flight.price,
+                            ).construct_booking()
+                        ]
 
-                        # Send confirmation email to the user
-                        send_flight_email(
-                            user,  # Correct user from the loop
-                            origin,
-                            destination,
-                            departure_date,
-                            return_date,
-                            passenger_name_record,
-                            travel_class,
-                            approved_flight
+                        complete_flight_booking(
+                            request,
+                            approved_flight,
+                            cart_item_id,
                         )
-
-                        if cart_item_id:
-                            remove_cart_item(request, cart_item_id)
+                        try:
+                            send_flight_email(
+                                user,
+                                origin,
+                                destination,
+                                departure_date,
+                                return_date,
+                                passenger_name_record,
+                                travel_class,
+                                approved_flight
+                            )
+                        except Exception as email_error:
+                            logger.exception(
+                                "Flight %s was booked but its confirmation email failed: %s",
+                                approved_flight.pk,
+                                email_error,
+                            )
+                            messages.warning(
+                                request,
+                                "Your flight was booked, but we could not send the confirmation email.",
+                            )
                         # Render the success page
                         return render(request, "demo/book_flight.html", {"response": passenger_name_record})
 
                 except Exception as booking_error:
-                    logger.error(
-                        f"Error booking flight for user {user.username}: {booking_error}")
-                    messages.success(
-                        request, f"Flight Booked {user.username}. Please check your mails.")
-                    send_flight_email_2(user, origin, destination, departure_date,
-                                        return_date, travel_class, approved_flight)
-                    if cart_item_id:
-                        remove_cart_item(request, cart_item_id)
-                    return render(request, "demo/success_page.html", {"user": user})
+                    logger.exception(
+                        "Could not complete approved flight %s for user %s: %s",
+                        approved_flight.pk,
+                        user.username,
+                        booking_error,
+                    )
+                    messages.error(
+                        request,
+                        "We could not complete this booking. Your approved flight remains in the cart so you can try again.",
+                    )
+                    return redirect('cart_detail')
 
         else:
             logger.warning("No approved flights found")
-            messages.error(request, "Your flight hasn't been approved yet.")
+            try:
+                added_to_cart = add_flight_to_cart(
+                    request,
+                    flight_data,
+                    flight_request.pk,
+                )
+            except ValueError as cart_error:
+                logger.warning(
+                    "Pending flight request could not be kept in the cart: %s",
+                    cart_error,
+                )
+                messages.warning(
+                    request,
+                    f"Your flight is awaiting approval, but {cart_error}",
+                )
+            else:
+                if added_to_cart:
+                    messages.info(
+                        request,
+                        "Your flight is awaiting approval and has been added to your cart.",
+                    )
+                else:
+                    messages.info(
+                        request,
+                        "Your flight is awaiting approval and remains in your cart.",
+                    )
 
             # Send email notification about pending approval
             send_flight_pending_email(
@@ -1355,8 +1616,7 @@ def book_flight(request):
                 price=price_in_local_currency,
                 flight_request=flight_request
             )
-            if cart_item_id:
-                remove_cart_item(request, cart_item_id)
+            return redirect('cart_detail')
 
     except requests.exceptions.HTTPError as http_err:
         logger.error(f"HTTP error occurred: {http_err}")
@@ -1365,21 +1625,29 @@ def book_flight(request):
         logger.exception(f"An unexpected error occurred: {error}")
         messages.error(request, f"An error occurred: {str(error)}")
 
-    return redirect('home')
+    return redirect('cart_detail' if cart_item_id else 'home')
 
 
 def origin_airport_search(request):
     data = []
     term = request.GET.get("term", None)
-    if request.is_ajax():
+    if request.headers.get("x-requested-with") == "XMLHttpRequest":
         if getattr(settings, 'USE_LIVE_FLIGHT_API', True):
             try:
+                if settings.FLIGHT_SEARCH_PROVIDER == 'duffel':
+                    result = airport_suggestions(term)
+                    return HttpResponse(
+                        json.dumps(list(dict.fromkeys(result))),
+                        content_type="application/json",
+                    )
                 data = amadeus.reference_data.locations.get(
-                    keyword=term, subType=Location.ANY
-                ).data
+                    keyword=term, subType=Location.ANY).data
             except Exception as error:
                 logger.warning(
-                    f"Amadeus origin autocomplete unavailable, using local airports: {error}")
+                    "%s origin autocomplete unavailable, using local airports: %s",
+                    settings.FLIGHT_SEARCH_PROVIDER.title(),
+                    error,
+                )
                 data = []
     result = get_city_airport_search_result(data, term)
     return HttpResponse(result, content_type="application/json")
@@ -1388,15 +1656,23 @@ def origin_airport_search(request):
 def destination_airport_search(request):
     data = []
     term = request.GET.get("term", None)
-    if request.is_ajax():
+    if request.headers.get("x-requested-with") == "XMLHttpRequest":
         if getattr(settings, 'USE_LIVE_FLIGHT_API', True):
             try:
+                if settings.FLIGHT_SEARCH_PROVIDER == 'duffel':
+                    result = airport_suggestions(term)
+                    return HttpResponse(
+                        json.dumps(list(dict.fromkeys(result))),
+                        content_type="application/json",
+                    )
                 data = amadeus.reference_data.locations.get(
-                    keyword=term, subType=Location.ANY
-                ).data
+                    keyword=term, subType=Location.ANY).data
             except Exception as error:
                 logger.warning(
-                    f"Amadeus destination autocomplete unavailable, using local airports: {error}")
+                    "%s destination autocomplete unavailable, using local airports: %s",
+                    settings.FLIGHT_SEARCH_PROVIDER.title(),
+                    error,
+                )
                 data = []
     result = get_city_airport_search_result(data, term)
     return HttpResponse(result, content_type="application/json")
@@ -1864,13 +2140,15 @@ def send_flight_email_2(user, origin, destination, departure_date, return_date, 
             'travel_agency': flight_request.mapped_travel_agency(),
         })
 
-    send_html_email(
+    sent_count = send_html_email(
         subject,
         'demo/email/flight_booking_email.html',
         context,
         flight_booking_recipients(flight_request),
     )
-    print("Email sent successfully!")
+    if sent_count:
+        print("Email sent successfully!")
+    return sent_count
 
 
 def send_flight_pending_email(user, origin, destination, departure_date, return_date, passenger_count, travel_class, price, flight_request=None):
@@ -1915,6 +2193,7 @@ def hotel(request):
     origin = normalize_city_code(request.POST.get('Origin'))
     checkinDate = request.POST.get('Checkindate')
     checkoutDate = request.POST.get('Checkoutdate')
+    exchange_rate = exchange_rate_for_user(request.user)
 
     try:
         guest_count = min(
@@ -1942,13 +2221,21 @@ def hotel(request):
         request.session['guest_count'] = guest_count
 
         raw_hotels = []
+        live_search_attempted = False
+        live_search_failed = False
         live_hotel_api_enabled = getattr(
             settings,
             'USE_LIVE_HOTEL_API',
             getattr(settings, 'USE_LIVE_FLIGHT_API', True)
         )
+        hotel_search_provider = getattr(
+            settings,
+            'HOTEL_SEARCH_PROVIDER',
+            'amadeus',
+        ).strip().lower()
 
-        if live_hotel_api_enabled:
+        if live_hotel_api_enabled and hotel_search_provider == 'amadeus':
+            live_search_attempted = True
             try:
                 hotel_list = amadeus.reference_data.locations.hotels.by_city.get(
                     cityCode=origin)
@@ -1967,36 +2254,66 @@ def hotel(request):
                     )
                     raw_hotels = list(search_hotels.data)
             except Exception as error:
+                live_search_failed = True
                 logger.warning(
-                    f"Amadeus hotel search unavailable, using local hotels: {error}")
+                    "Amadeus hotel search unavailable, using standalone hotels: %s",
+                    error,
+                )
 
         minimum_results = getattr(
             settings, 'MIN_HOTEL_RESULTS', LOCAL_HOTEL_RESULTS_TARGET)
-        if len(raw_hotels) < minimum_results:
-            had_live_hotels = bool(raw_hotels)
-            local_hotels = local_hotel_search(
+        using_standalone_hotels = not raw_hotels
+        if using_standalone_hotels:
+            raw_hotels = local_hotel_search(
                 city_code=origin,
                 checkin_date=checkinDate,
                 checkout_date=checkoutDate,
                 guest_count=guest_count,
                 max_results=minimum_results,
             )
-            raw_hotels.extend(
-                local_hotels[:max(minimum_results - len(raw_hotels), 0)])
-            if local_hotels and not had_live_hotels:
+            if raw_hotels:
+                if live_search_failed:
+                    fallback_message = (
+                        "Live hotel search is unavailable. "
+                        "Showing standalone hotel inventory instead."
+                    )
+                elif live_search_attempted:
+                    fallback_message = (
+                        "No live hotel inventory was returned. "
+                        "Showing standalone hotel inventory instead."
+                    )
+                else:
+                    fallback_message = "Showing standalone hotel inventory."
                 messages.info(
-                    request, "Showing locally priced hotels while live hotel inventory is unavailable.")
-            elif local_hotels:
-                messages.info(
-                    request, "Showing additional local hotel options for this city.")
+                    request,
+                    fallback_message,
+                )
 
-        hotel_offers = []
-        hotel_results = []
-        for hotel_data in raw_hotels:
-            offer = Hotel(hotel_data).construct_hotel()
-            if offer:
-                hotel_offers.append(offer)
-                hotel_results.append(hotel_data)
+        hotel_offers, hotel_results = construct_hotel_results(
+            raw_hotels,
+            exchange_rate=exchange_rate,
+        )
+
+        # A provider can return records that do not contain usable room offers.
+        # Treat that as an unusable live response and fall back as well.
+        if not hotel_offers and not using_standalone_hotels:
+            raw_hotels = local_hotel_search(
+                city_code=origin,
+                checkin_date=checkinDate,
+                checkout_date=checkoutDate,
+                guest_count=guest_count,
+                max_results=minimum_results,
+            )
+            hotel_offers, hotel_results = construct_hotel_results(
+                raw_hotels,
+                exchange_rate=exchange_rate,
+            )
+            if hotel_offers:
+                messages.info(
+                    request,
+                    "Live hotel results could not be displayed. "
+                    "Showing standalone hotel inventory instead.",
+                )
 
         if not hotel_offers:
             messages.info(request, "No hotels found in this location.")
@@ -2018,6 +2335,20 @@ def hotel(request):
         'demo/hotel/demo_form.html',
         hotel_search_form_context(request.POST),
     )
+
+
+def construct_hotel_results(raw_hotels, exchange_rate=None):
+    hotel_offers = []
+    hotel_results = []
+    for hotel_data in raw_hotels:
+        offer = Hotel(
+            hotel_data,
+            exchange_rate=exchange_rate,
+        ).construct_hotel()
+        if offer:
+            hotel_offers.append(offer)
+            hotel_results.append(hotel_data)
+    return hotel_offers, hotel_results
 
 
 def validate_hotel_search(origin, checkin_date, checkout_date):
@@ -2060,7 +2391,10 @@ def rooms_per_hotel(request, hotel, departureDate, returnDate):
                                                              checkInDate=departureDate,
                                                              checkOutDate=returnDate,
                                                              adults=guest_count).data
-        hotel_rooms = Room(rooms).construct_room()
+        hotel_rooms = Room(
+            rooms,
+            exchange_rate=exchange_rate_for_user(request.user),
+        ).construct_room()
         try:
             stay_nights = max(
                 (
@@ -2083,13 +2417,28 @@ def rooms_per_hotel(request, hotel, departureDate, returnDate):
         return render(request, 'demo/hotel/rooms_per_hotel.html', {})
 
 
-def send_hotel_booking_email(user, hotel_details, booking_details):
+def send_hotel_booking_email(
+    user,
+    hotel_details,
+    booking_details,
+    exchange_rate=None,
+    confirmed_price=None,
+):
     subject = "Hotel Booking Confirmation from Online Booking Tool"
     from_email = settings.EMAIL_HOST_USER
     to_email = role_recipients(
         settings.HOTEL_BOOKING_NOTIFICATION_RECIPIENT_ROLES)
 
     # Render the HTML template and strip it to plain text
+    total_price = (
+        str(confirmed_price)
+        if confirmed_price is not None
+        else format_price_naira(
+            hotel_details['offers'][0]['price']['total'],
+            hotel_details['offers'][0]['price'].get('currency', 'USD'),
+            exchange_rate=exchange_rate,
+        )
+    )
     html_content = render_to_string("demo/email/hotel_booking_email.html", {
         "user": user,
         "hotel_name": hotel_details['hotel']['name'],
@@ -2098,10 +2447,7 @@ def send_hotel_booking_email(user, hotel_details, booking_details):
         "room_type": hotel_details['offers'][0]['room']['type'],
         "booking_id": booking_details[0]['id'],
         "confirmation_id": booking_details[0]['providerConfirmationId'],
-        "total_price": format_price_naira(
-            hotel_details['offers'][0]['price']['total'],
-            hotel_details['offers'][0]['price'].get('currency', 'USD'),
-        ),
+        "total_price": total_price,
         "currency": "₦"
     })
     text_content = strip_tags(html_content)
@@ -2135,6 +2481,7 @@ def book_hotel(request, offer_id):
 
     try:
         cart_item_id = request.POST.get("cart_item_id")
+        cart_item = None
         if cart_item_id:
             cart_item = get_cart_item(request, cart_item_id)
             if not cart_item or cart_item.get("type") != "hotel":
@@ -2155,13 +2502,20 @@ def book_hotel(request, offer_id):
                 request.user,
                 hotel_details,
                 booking_details,
+                exchange_rate=exchange_rate_for_user(request.user),
+                confirmed_price=(
+                    cart_item.get("summary", {}).get("price")
+                    if cart_item
+                    and cart_item.get("summary", {}).get("price_verified")
+                    else None
+                ),
             )
 
         if cart_item_id:
             remove_cart_item(request, cart_item_id)
 
         context = hotel_booking_success_context()
-        context["cart_count"] = len(cart_items(request))
+        context["cart_count"] = cart_count(request)
         return render(request, "demo/success_page.html", context)
     except Exception as error:
         messages.add_message(request, messages.ERROR, str(error))
@@ -2171,13 +2525,18 @@ def book_hotel(request, offer_id):
 def city_search(request):
     data = []
     term = request.GET.get('term', None)
-    if request.is_ajax():
+    if request.headers.get('x-requested-with') == 'XMLHttpRequest':
         live_hotel_api_enabled = getattr(
             settings,
             'USE_LIVE_HOTEL_API',
             getattr(settings, 'USE_LIVE_FLIGHT_API', True)
         )
-        if live_hotel_api_enabled:
+        hotel_search_provider = getattr(
+            settings,
+            'HOTEL_SEARCH_PROVIDER',
+            'amadeus',
+        ).strip().lower()
+        if live_hotel_api_enabled and hotel_search_provider == 'amadeus':
             try:
                 data = amadeus.reference_data.locations.get(keyword=term,
                                                             subType=Location.ANY).data

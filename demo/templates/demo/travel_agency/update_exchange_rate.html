@@ -1,0 +1,97 @@
+{% extends 'demo/travel_agency/base.html' %}
+
+{% block title %}Exchange Rate{% endblock %}
+
+{% block content %}
+<style>
+    .exchange-rate-card {
+        max-width: 620px;
+        margin: 30px auto;
+        padding: 32px;
+        background: #ffffff;
+        border: 1px solid #e1e6eb;
+        border-radius: 12px;
+        box-shadow: 0 10px 24px rgba(0, 0, 0, 0.08);
+    }
+
+    .exchange-rate-card h1 {
+        color: #007bff;
+        margin-bottom: 10px;
+    }
+
+    .exchange-rate-card p {
+        color: #5f6b76;
+        margin-bottom: 24px;
+    }
+
+    .form-group label {
+        display: block;
+        margin-bottom: 8px;
+        font-weight: 600;
+    }
+
+    .form-control {
+        width: 100%;
+        padding: 12px;
+        border: 1px solid #cbd3da;
+        border-radius: 7px;
+        font-size: 16px;
+    }
+
+    .help-text {
+        display: block;
+        margin-top: 8px;
+        color: #68737d;
+        font-size: 14px;
+    }
+
+    .error-list,
+    .errorlist {
+        margin: 8px 0 0;
+        color: #c62828;
+    }
+
+    .message {
+        margin-bottom: 18px;
+        padding: 12px;
+        color: #155724;
+        background: #d4edda;
+        border-radius: 6px;
+    }
+
+    .btn-submit {
+        margin-top: 22px;
+        padding: 12px 24px;
+        color: #ffffff;
+        background: #198754;
+        border: 0;
+        border-radius: 7px;
+        cursor: pointer;
+        font-size: 16px;
+    }
+</style>
+
+<div class="exchange-rate-card">
+    <h1>Exchange Rate</h1>
+    <p>This rate is used to convert USD flight and hotel prices to naira for your managed organizations.</p>
+
+    {% if messages %}
+        {% for message in messages %}
+            <div class="message">{{ message }}</div>
+        {% endfor %}
+    {% endif %}
+
+    <form method="post" novalidate>
+        {% csrf_token %}
+        <div class="form-group">
+            {{ form.exchange_rate.label_tag }}
+            {{ form.exchange_rate }}
+            {% if form.exchange_rate.help_text %}
+                <span class="help-text">{{ form.exchange_rate.help_text }}</span>
+            {% endif %}
+            {{ form.exchange_rate.errors }}
+        </div>
+        <button type="submit" class="btn-submit">Save Exchange Rate</button>
+    </form>
+</div>
+{% endblock %}
