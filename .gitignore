@@ -1,10 +1,15 @@
 .env
+.env.*
+!.env.example
 .venv/
 __pycache__/
 *.py[cod]
 *.pyo
 *.log
+db.sqlite3
+db.sqlite3-*
 staticfiles/
 media/
+.vercel/
 .DS_Store
 Thumbs.db

@@ -365,16 +365,25 @@ def admin_profile_view(request):
 @admin_required
 def admin_update_profile_picture(request):
     if request.method == 'POST':
-        profile_picture = request.FILES.get('profile_picture')
-        if profile_picture:
-            request.user.profile.profile_picture = profile_picture
-            request.user.profile.save()
+        form = ProfileForm(
+            request.POST,
+            request.FILES,
+            instance=request.user.profile,
+        )
+        if 'profile_picture' not in request.FILES:
+            messages.error(request, 'Select a profile picture to upload.')
+        elif form.is_valid():
+            form.save()
             messages.success(request, 'Profile picture updated successfully.')
             return redirect('admin_profile')
         else:
-            messages.error(request, 'No file selected or an error occurred.')
+            error = form.errors.get('profile_picture')
+            messages.error(
+                request,
+                error[0] if error else 'No valid profile picture was selected.',
+            )
 
-    return render(request, 'demo/admin/profile.html', {'error_message': messages.get_messages(request)})
+    return redirect('admin_profile')
 
 
 @admin_required
@@ -681,16 +690,25 @@ def profile_view(request):
 @staff_required
 def update_profile_picture(request):
     if request.method == 'POST':
-        profile_picture = request.FILES.get('profile_picture')
-        if profile_picture:
-            request.user.profile.profile_picture = profile_picture
-            request.user.profile.save()
+        form = ProfileForm(
+            request.POST,
+            request.FILES,
+            instance=request.user.profile,
+        )
+        if 'profile_picture' not in request.FILES:
+            messages.error(request, 'Select a profile picture to upload.')
+        elif form.is_valid():
+            form.save()
             messages.success(request, 'Profile picture updated successfully.')
             return redirect('profile')
         else:
-            messages.error(request, 'No file selected or an error occurred.')
+            error = form.errors.get('profile_picture')
+            messages.error(
+                request,
+                error[0] if error else 'No valid profile picture was selected.',
+            )
 
-    return render(request, 'demo/staff/profile.html', {'error_message': messages.get_messages(request)})
+    return redirect('profile')
 
 
 # end profile
@@ -1210,6 +1228,7 @@ def get_access_token():
                 "client_id": settings.AMADEUS_CLIENT_ID,
                 "client_secret": settings.AMADEUS_CLIENT_SECRET,
             },
+            timeout=settings.FLIGHT_SEARCH_TIMEOUT_SECONDS,
         )
         response.raise_for_status()
         token_data = response.json()
@@ -1520,7 +1539,8 @@ def book_flight(request):
                             booking_api_endpoint,
                             headers=headers,
                             json={"data": {
-                                "type": "flight-order", "flightOffers": flight_price_confirmed, "travelers": [traveler]}}
+                                "type": "flight-order", "flightOffers": flight_price_confirmed, "travelers": [traveler]}},
+                            timeout=settings.FLIGHT_SEARCH_TIMEOUT_SECONDS,
                         )
                         response.raise_for_status()
 

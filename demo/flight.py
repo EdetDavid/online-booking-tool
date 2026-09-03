@@ -5,6 +5,7 @@ from decimal import Decimal
 from .models import PriceIncrement
 from .pricing import currency_amount_in_naira
 
+
 class Flight:
     def __init__(self, flight, exchange_rate=None):
         self.flight = flight
@@ -17,7 +18,7 @@ class Flight:
         if not increment:
             increment_value = 0  # Default value if no increment is set
         else:
-            increment_value = increment.increment_value 
+            increment_value = increment.increment_value
 
         offer = {}
         index = 0
@@ -35,7 +36,8 @@ class Flight:
         offer['cabin_display'] = offer['cabin'].replace('_', ' ').title()
         offer['trip_type'] = self.flight.get(
             'tripType',
-            'round-trip' if len(self.flight.get('itineraries', [])) > 1 else 'one-way',
+            'round-trip' if len(self.flight.get('itineraries',
+                                [])) > 1 else 'one-way',
         )
         offer['airlines'] = ''
         offer['stops'] = 0
@@ -89,34 +91,58 @@ class Flight:
             )
 
             if len(self.flight['itineraries'][index]['segments']) == 2:  # One-stop flight
-                offer[str(index) + 'firstFlightDepartureAirport'] = self.flight['itineraries'][index]['segments'][0]['departure']['iataCode']
-                offer[str(index) + 'firstFlightAirlineLogo'] = get_airline_logo(self.flight['itineraries'][index]['segments'][0]['carrierCode'])
-                offer[str(index) + 'firstFlightAirline'] = self.flight['itineraries'][index]['segments'][0]['carrierCode']
-                offer[str(index) + 'firstFlightDepartureDate'] = get_hour(self.flight['itineraries'][index]['segments'][0]['departure']['at'])
-                offer[str(index) + 'firstFlightArrivalAirport'] = self.flight['itineraries'][index]['segments'][0]['arrival']['iataCode']
-                offer[str(index) + 'firstFlightArrivalDate'] = get_hour(self.flight['itineraries'][index]['segments'][0]['arrival']['at'])
-                offer[str(index) + 'firstFlightArrivalDuration'] = self.flight['itineraries'][index]['segments'][0]['duration']
-                offer[str(index) + 'secondFlightDepartureAirport'] = self.flight['itineraries'][index]['segments'][1]['departure']['iataCode']
-                offer[str(index) + 'secondFlightDepartureDate'] = get_hour(self.flight['itineraries'][index]['segments'][1]['departure']['at'])
-                offer[str(index) + 'secondFlightAirlineLogo'] = get_airline_logo(self.flight['itineraries'][index]['segments'][1]['carrierCode'])
-                offer[str(index) + 'secondFlightAirline'] = self.flight['itineraries'][index]['segments'][1]['carrierCode']
-                offer[str(index) + 'secondFlightArrivalAirport'] = self.flight['itineraries'][index]['segments'][1]['arrival']['iataCode']
-                offer[str(index) + 'secondFlightArrivalDate'] = get_hour(self.flight['itineraries'][index]['segments'][1]['arrival']['at'])
-                offer[str(index) + 'secondFlightArrivalDuration'] = self.flight['itineraries'][index]['segments'][1]['duration']
-                offer[str(index) + 'FlightTotalDuration'] = self.flight['itineraries'][index]['duration'][2:]
+                offer[str(
+                    index) + 'firstFlightDepartureAirport'] = self.flight['itineraries'][index]['segments'][0]['departure']['iataCode']
+                offer[str(index) + 'firstFlightAirlineLogo'] = get_airline_logo(
+                    self.flight['itineraries'][index]['segments'][0]['carrierCode'])
+                offer[str(
+                    index) + 'firstFlightAirline'] = self.flight['itineraries'][index]['segments'][0]['carrierCode']
+                offer[str(index) + 'firstFlightDepartureDate'] = get_hour(
+                    self.flight['itineraries'][index]['segments'][0]['departure']['at'])
+                offer[str(
+                    index) + 'firstFlightArrivalAirport'] = self.flight['itineraries'][index]['segments'][0]['arrival']['iataCode']
+                offer[str(index) + 'firstFlightArrivalDate'] = get_hour(
+                    self.flight['itineraries'][index]['segments'][0]['arrival']['at'])
+                offer[str(
+                    index) + 'firstFlightArrivalDuration'] = self.flight['itineraries'][index]['segments'][0]['duration']
+                offer[str(
+                    index) + 'secondFlightDepartureAirport'] = self.flight['itineraries'][index]['segments'][1]['departure']['iataCode']
+                offer[str(index) + 'secondFlightDepartureDate'] = get_hour(
+                    self.flight['itineraries'][index]['segments'][1]['departure']['at'])
+                offer[str(index) + 'secondFlightAirlineLogo'] = get_airline_logo(
+                    self.flight['itineraries'][index]['segments'][1]['carrierCode'])
+                offer[str(
+                    index) + 'secondFlightAirline'] = self.flight['itineraries'][index]['segments'][1]['carrierCode']
+                offer[str(
+                    index) + 'secondFlightArrivalAirport'] = self.flight['itineraries'][index]['segments'][1]['arrival']['iataCode']
+                offer[str(index) + 'secondFlightArrivalDate'] = get_hour(
+                    self.flight['itineraries'][index]['segments'][1]['arrival']['at'])
+                offer[str(
+                    index) + 'secondFlightArrivalDuration'] = self.flight['itineraries'][index]['segments'][1]['duration']
+                offer[str(
+                    index) + 'FlightTotalDuration'] = self.flight['itineraries'][index]['duration'][2:]
                 offer[str(index) + 'stop_time'] = get_stoptime(self.flight['itineraries'][index]['duration'],
-                                                               offer[str(index) + 'firstFlightArrivalDuration'],
+                                                               offer[str(
+                                                                   index) + 'firstFlightArrivalDuration'],
                                                                offer[str(index) + 'secondFlightArrivalDuration'])
 
             elif len(self.flight['itineraries'][index]['segments']) == 1:  # Direct flight
-                offer[str(index) + 'firstFlightDepartureAirport'] = self.flight['itineraries'][index]['segments'][0]['departure']['iataCode']
-                offer[str(index) + 'firstFlightAirlineLogo'] = get_airline_logo(self.flight['itineraries'][index]['segments'][0]['carrierCode'])
-                offer[str(index) + 'firstFlightAirline'] = self.flight['itineraries'][index]['segments'][0]['carrierCode']
-                offer[str(index) + 'firstFlightDepartureDate'] = get_hour(self.flight['itineraries'][index]['segments'][0]['departure']['at'])
-                offer[str(index) + 'firstFlightArrivalAirport'] = self.flight['itineraries'][index]['segments'][0]['arrival']['iataCode']
-                offer[str(index) + 'firstFlightArrivalDate'] = get_hour(self.flight['itineraries'][index]['segments'][0]['arrival']['at'])
-                offer[str(index) + 'firstFlightArrivalDuration'] = self.flight['itineraries'][index]['segments'][0]['duration']
-                offer[str(index) + 'FlightTotalDuration'] = self.flight['itineraries'][index]['duration'][2:]
+                offer[str(
+                    index) + 'firstFlightDepartureAirport'] = self.flight['itineraries'][index]['segments'][0]['departure']['iataCode']
+                offer[str(index) + 'firstFlightAirlineLogo'] = get_airline_logo(
+                    self.flight['itineraries'][index]['segments'][0]['carrierCode'])
+                offer[str(
+                    index) + 'firstFlightAirline'] = self.flight['itineraries'][index]['segments'][0]['carrierCode']
+                offer[str(index) + 'firstFlightDepartureDate'] = get_hour(
+                    self.flight['itineraries'][index]['segments'][0]['departure']['at'])
+                offer[str(
+                    index) + 'firstFlightArrivalAirport'] = self.flight['itineraries'][index]['segments'][0]['arrival']['iataCode']
+                offer[str(index) + 'firstFlightArrivalDate'] = get_hour(
+                    self.flight['itineraries'][index]['segments'][0]['arrival']['at'])
+                offer[str(
+                    index) + 'firstFlightArrivalDuration'] = self.flight['itineraries'][index]['segments'][0]['duration']
+                offer[str(
+                    index) + 'FlightTotalDuration'] = self.flight['itineraries'][index]['duration'][2:]
 
             index += 1
 
@@ -166,31 +192,38 @@ def get_stoptime(total_duration, first_flight_duration, second_flight_duration):
     if re.search('PT(.*)H', total_duration) is None:
         total_duration_hours = 0
     else:
-        total_duration_hours = int(re.search('PT(.*)H', total_duration).group(1))
+        total_duration_hours = int(
+            re.search('PT(.*)H', total_duration).group(1))
     if re.search('H(.*)M', total_duration) is None:
         total_duration_minutes = 0
     else:
-        total_duration_minutes = int(re.search('H(.*)M', total_duration).group(1))
+        total_duration_minutes = int(
+            re.search('H(.*)M', total_duration).group(1))
 
     if re.search('PT(.*)H', first_flight_duration) is None:
         first_flight_hours = 0
     else:
-        first_flight_hours = int(re.search('PT(.*)H', first_flight_duration).group(1))
+        first_flight_hours = int(
+            re.search('PT(.*)H', first_flight_duration).group(1))
     if re.search('H(.*)M', first_flight_duration) is None:
         first_flight_minutes = 0
     else:
-        first_flight_minutes = int(re.search('H(.*)M', first_flight_duration).group(1))
+        first_flight_minutes = int(
+            re.search('H(.*)M', first_flight_duration).group(1))
 
     if re.search('PT(.*)H', second_flight_duration) is None:
         second_flight_hours = 0
     else:
-        second_flight_hours = int(re.search('PT(.*)H', second_flight_duration).group(1))
+        second_flight_hours = int(
+            re.search('PT(.*)H', second_flight_duration).group(1))
     if re.search('H(.*)M', second_flight_duration) is None:
         second_flight_minutes = 0
     else:
-        second_flight_minutes = int(re.search('H(.*)M', second_flight_duration).group(1))
+        second_flight_minutes = int(
+            re.search('H(.*)M', second_flight_duration).group(1))
 
-    connection_minutes = (total_duration_hours*60 + total_duration_minutes) - (first_flight_hours*60 + first_flight_minutes + second_flight_hours*60 + second_flight_minutes)
+    connection_minutes = (total_duration_hours*60 + total_duration_minutes) - (
+        first_flight_hours*60 + first_flight_minutes + second_flight_hours*60 + second_flight_minutes)
     hours = connection_minutes // 60
     minutes = connection_minutes % 60
     return f'{hours}:{minutes:02d}'

@@ -148,9 +148,15 @@
                     {% for staff in staffs %}
                         <tr>
                             <td data-label="Profile Picture">
-                                <img src="{{ staff.staff.profile.profile_picture.url }}"
-                                     alt="{{ staff.username }}'s Profile"
-                                     class="profile-image">
+                                {% if staff.staff.profile.profile_picture %}
+                                    <img src="{{ staff.staff.profile.profile_picture.url }}"
+                                         alt="{{ staff.staff.username }}'s Profile"
+                                         class="profile-image">
+                                {% else %}
+                                    <img src="{% static 'demo/default_profile_picture.svg' %}"
+                                         alt="Default profile picture"
+                                         class="profile-image">
+                                {% endif %}
                             </td>
                             <td data-label="Username">{{ staff.staff.username }}</td>
                             <td data-label="First Name">{{ staff.first_name }}</td>

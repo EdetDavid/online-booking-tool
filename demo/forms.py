@@ -260,9 +260,23 @@ class StaffUserCreationForm(UserCreationForm):
 
 class ProfileForm(forms.ModelForm):
 
+    MAX_PROFILE_PICTURE_SIZE = 4 * 1024 * 1024
+
     class Meta:
         model = Profile
         fields = ['profile_picture']
+
+    def clean_profile_picture(self):
+        profile_picture = self.cleaned_data.get('profile_picture')
+        uploaded_picture = self.files.get(self.add_prefix('profile_picture'))
+        if (
+            uploaded_picture
+            and uploaded_picture.size > self.MAX_PROFILE_PICTURE_SIZE
+        ):
+            raise forms.ValidationError(
+                'Profile pictures must be smaller than 4 MB.'
+            )
+        return profile_picture
 
 
 class TravelAgencyOrganizationForm(forms.ModelForm):

@@ -1,6 +1,7 @@
 from decimal import Decimal
 
 import geocoder
+from django.conf import settings
 
 from .models import PriceIncrement
 from .pricing import currency_amount_in_naira
@@ -35,7 +36,8 @@ class Hotel:
             if not offer['address']:
                 address = geocoder.osm(
                     [hotel_info['latitude'], hotel_info['longitude']],
-                    method='reverse'
+                    method='reverse',
+                    timeout=settings.HOTEL_SEARCH_TIMEOUT_SECONDS,
                 )
                 if address and address.json:
                     if address.json.get('houseNumber') is not None:
