@@ -238,10 +238,21 @@ CSRF_FAILURE_VIEW = "demo.views.csrf_failure"
 
 
 # Email
+
+
+def default_email_backend(is_production):
+    """Use SES in deployments and a non-delivering console backend locally."""
+    if is_production:
+        return "django_ses.SESBackend"
+    return "django.core.mail.backends.console.EmailBackend"
+
+
 EMAIL_BACKEND = env(
-    "EMAIL_BACKEND", default="demo.brevo_email_backend.BrevoEmailBackend"
+    "EMAIL_BACKEND", default=default_email_backend(IS_PRODUCTION)
 )
 EMAIL_HOST_USER = env("EMAIL_HOST_USER", default="")
+DEFAULT_FROM_EMAIL = env("DEFAULT_FROM_EMAIL", default=EMAIL_HOST_USER)
+SERVER_EMAIL = env("SERVER_EMAIL", default=DEFAULT_FROM_EMAIL)
 BREVO_API_KEY = env("BREVO_API_KEY", default="")
 BREVO_API_URL = env(
     "BREVO_API_URL", default="https://api.brevo.com/v3/smtp/email"
@@ -250,15 +261,12 @@ BREVO_SENDER_EMAIL = env("BREVO_SENDER_EMAIL", default=EMAIL_HOST_USER)
 BREVO_SENDER_NAME = env("BREVO_SENDER_NAME", default="Online Booking Tool")
 EMAIL_FALLBACK_BACKEND = env(
     "EMAIL_FALLBACK_BACKEND",
-    default=(
-        "django_ses.SESBackend"
-        if IS_PRODUCTION
-        else "django.core.mail.backends.console.EmailBackend"
-    ),
+    default="",
 )
 
-# django-ses can use explicit keys or the normal boto3 credential chain. None of
-# these variables are required merely to import the Django settings module.
+# django-ses can use explicit SES-only keys or the normal boto3 credential
+# chain. SES-prefixed settings prevent email credentials from being confused
+# with Backblaze B2's S3-compatible media credentials.
 if any(
     backend.startswith("django_ses.")
     for backend in (EMAIL_BACKEND, EMAIL_FALLBACK_BACKEND)
@@ -268,15 +276,24 @@ if any(
         "AWS_SES_REGION_ENDPOINT",
         default=f"email.{AWS_SES_REGION_NAME}.amazonaws.com",
     )
-    aws_access_key = env("AWS_ACCESS_KEY_ID", default="")
-    aws_secret_key = env("AWS_SECRET_ACCESS_KEY", default="")
-    aws_session_token = env("AWS_SESSION_TOKEN", default="")
-    if aws_access_key:
-        AWS_ACCESS_KEY_ID = aws_access_key
-    if aws_secret_key:
-        AWS_SECRET_ACCESS_KEY = aws_secret_key
-    if aws_session_token:
-        AWS_SESSION_TOKEN = aws_session_token
+    ses_access_key = env(
+        "AWS_SES_ACCESS_KEY_ID",
+        default=env("AWS_ACCESS_KEY_ID", default=""),
+    )
+    ses_secret_key = env(
+        "AWS_SES_SECRET_ACCESS_KEY",
+        default=env("AWS_SECRET_ACCESS_KEY", default=""),
+    )
+    ses_session_token = env(
+        "AWS_SES_SESSION_TOKEN",
+        default=env("AWS_SESSION_TOKEN", default=""),
+    )
+    if ses_access_key:
+        AWS_SES_ACCESS_KEY_ID = ses_access_key
+    if ses_secret_key:
+        AWS_SES_SECRET_ACCESS_KEY = ses_secret_key
+    if ses_session_token:
+        AWS_SES_SESSION_TOKEN = ses_session_token
 
 TRAVEL_AGENCY_DEFAULT_COMPANY_CODE = env(
     "TRAVEL_AGENCY_DEFAULT_COMPANY_CODE", default="OBT1234"
@@ -327,60 +344,171 @@ STORAGES = {
     },
 }
 
-s3_bucket_name = env("AWS_STORAGE_BUCKET_NAME", default="").strip()
-USE_S3_STORAGE = env.bool("USE_S3_STORAGE", default=bool(s3_bucket_name))
-if USE_S3_STORAGE:
-    if not s3_bucket_name:
+
+def backblaze_storage_options(
+    *,
+    bucket_name,
+    application_key_id,
+    application_key,
+    region,
+    endpoint_url="",
+    location="media",
+    querystring_auth=True,
+    querystring_expire=3600,
+    file_overwrite=False,
+    addressing_style="path",
+    custom_domain="",
+):
+    """Build a django-storages configuration locked to Backblaze B2."""
+    bucket_name = str(bucket_name or "").strip()
+    application_key_id = str(application_key_id or "").strip()
+    application_key = str(application_key or "").strip()
+    region = str(region or "").strip().lower()
+    missing = [
+        name
+        for name, value in (
+            ("B2_BUCKET_NAME", bucket_name),
+            ("B2_APPLICATION_KEY_ID", application_key_id),
+            ("B2_APPLICATION_KEY", application_key),
+            ("B2_REGION", region),
+        )
+        if not value
+    ]
+    if missing:
         raise ImproperlyConfigured(
-            "AWS_STORAGE_BUCKET_NAME is required when USE_S3_STORAGE is enabled."
+            "Backblaze B2 storage is missing: " + ", ".join(missing)
         )
 
-    s3_options = {
-        "bucket_name": s3_bucket_name,
-        "location": env("AWS_MEDIA_LOCATION", default="media").strip("/"),
-        "default_acl": env("AWS_DEFAULT_ACL", default="").strip() or None,
-        "querystring_auth": env.bool("AWS_QUERYSTRING_AUTH", default=True),
-        "file_overwrite": env.bool("AWS_S3_FILE_OVERWRITE", default=False),
-    }
-    optional_s3_options = {
-        "access_key": env(
-            "AWS_STORAGE_ACCESS_KEY_ID",
-            default=env("AWS_ACCESS_KEY_ID", default=""),
-        ),
-        "secret_key": env(
-            "AWS_STORAGE_SECRET_ACCESS_KEY",
-            default=env("AWS_SECRET_ACCESS_KEY", default=""),
-        ),
-        "security_token": env(
-            "AWS_STORAGE_SESSION_TOKEN",
-            default=env("AWS_SESSION_TOKEN", default=""),
-        ),
-        "region_name": env("AWS_S3_REGION_NAME", default=""),
-        "endpoint_url": env("AWS_S3_ENDPOINT_URL", default=""),
-        "addressing_style": env("AWS_S3_ADDRESSING_STYLE", default=""),
-    }
-    s3_options.update(
-        {key: value for key, value in optional_s3_options.items() if value}
-    )
+    if (
+        not region.isascii()
+        or not region[0].isalnum()
+        or not region[-1].isalnum()
+        or not all(
+            character.isalnum() or character == "-" for character in region
+        )
+    ):
+        raise ImproperlyConfigured("B2_REGION is not a valid Backblaze B2 region.")
 
-    custom_domain = env("AWS_S3_CUSTOM_DOMAIN", default="").strip()
+    expected_host = f"s3.{region}.backblazeb2.com"
+    endpoint_url = str(endpoint_url or "").strip() or f"https://{expected_host}"
+    try:
+        parsed_endpoint = urlsplit(endpoint_url)
+        endpoint_port = parsed_endpoint.port
+    except ValueError as exc:
+        raise ImproperlyConfigured(
+            "B2_ENDPOINT_URL is not a valid Backblaze B2 endpoint."
+        ) from exc
+    if (
+        parsed_endpoint.scheme != "https"
+        or parsed_endpoint.hostname != expected_host
+        or endpoint_port is not None
+        or parsed_endpoint.username is not None
+        or parsed_endpoint.password is not None
+        or parsed_endpoint.path not in {"", "/"}
+        or parsed_endpoint.query
+        or parsed_endpoint.fragment
+    ):
+        raise ImproperlyConfigured(
+            "B2_ENDPOINT_URL must be https://s3.<B2_REGION>.backblazeb2.com."
+        )
+
+    addressing_style = str(addressing_style or "").strip().lower()
+    if addressing_style not in {"path", "virtual"}:
+        raise ImproperlyConfigured(
+            "B2_ADDRESSING_STYLE must be either 'path' or 'virtual'."
+        )
+
+    try:
+        querystring_expire = int(querystring_expire)
+    except (TypeError, ValueError) as exc:
+        raise ImproperlyConfigured(
+            "B2_QUERYSTRING_EXPIRE must be a positive integer."
+        ) from exc
+    if not 0 < querystring_expire <= 604800:
+        raise ImproperlyConfigured(
+            "B2_QUERYSTRING_EXPIRE must be between 1 and 604800 seconds."
+        )
+
+    options = {
+        "bucket_name": bucket_name,
+        "access_key": application_key_id,
+        "secret_key": application_key,
+        # Never mix B2 application keys with AWS IAM/STS state used by SES.
+        "security_token": None,
+        "session_profile": None,
+        "region_name": region,
+        "endpoint_url": f"https://{expected_host}",
+        "location": str(location or "").strip("/"),
+        # B2 permissions are bucket-level; do not send per-object ACLs.
+        "default_acl": None,
+        "querystring_auth": bool(querystring_auth),
+        "querystring_expire": querystring_expire,
+        "file_overwrite": bool(file_overwrite),
+        "addressing_style": addressing_style,
+        "signature_version": "s3v4",
+    }
+
+    custom_domain = str(custom_domain or "").strip()
     if custom_domain:
-        custom_domain = custom_domain.removeprefix("https://").removeprefix(
-            "http://"
-        ).rstrip("/")
-        s3_options["custom_domain"] = custom_domain
-        s3_options["url_protocol"] = env(
-            "AWS_S3_URL_PROTOCOL", default="https:"
-        )
+        if querystring_auth:
+            raise ImproperlyConfigured(
+                "B2_CUSTOM_DOMAIN requires a public bucket and "
+                "B2_QUERYSTRING_AUTH=False."
+            )
+        try:
+            parsed_domain = urlsplit(
+                custom_domain if "://" in custom_domain else f"//{custom_domain}"
+            )
+            custom_domain_port = parsed_domain.port
+        except ValueError as exc:
+            raise ImproperlyConfigured(
+                "B2_CUSTOM_DOMAIN must be an HTTPS host name without a path."
+            ) from exc
+        if (
+            parsed_domain.scheme not in {"", "https"}
+            or not parsed_domain.hostname
+            or custom_domain_port is not None
+            or parsed_domain.username is not None
+            or parsed_domain.password is not None
+            or parsed_domain.path not in {"", "/"}
+            or parsed_domain.query
+            or parsed_domain.fragment
+        ):
+            raise ImproperlyConfigured(
+                "B2_CUSTOM_DOMAIN must be an HTTPS host name without a path."
+            )
+        options["custom_domain"] = parsed_domain.hostname
+        options["url_protocol"] = "https:"
 
+    return options
+
+
+b2_bucket_name = env("B2_BUCKET_NAME", default="").strip()
+USE_B2_STORAGE = env.bool("USE_B2_STORAGE", default=bool(b2_bucket_name))
+if USE_B2_STORAGE:
+    b2_options = backblaze_storage_options(
+        bucket_name=b2_bucket_name,
+        application_key_id=env("B2_APPLICATION_KEY_ID", default=""),
+        application_key=env("B2_APPLICATION_KEY", default=""),
+        region=env("B2_REGION", default=""),
+        endpoint_url=env("B2_ENDPOINT_URL", default=""),
+        location=env("B2_MEDIA_LOCATION", default="media"),
+        querystring_auth=env.bool("B2_QUERYSTRING_AUTH", default=True),
+        querystring_expire=env.int("B2_QUERYSTRING_EXPIRE", default=3600),
+        file_overwrite=env.bool("B2_FILE_OVERWRITE", default=False),
+        addressing_style=env("B2_ADDRESSING_STYLE", default="path"),
+        custom_domain=env("B2_CUSTOM_DOMAIN", default=""),
+    )
     STORAGES["default"] = {
+        # Backblaze B2 exposes an S3-compatible API; this backend does not send
+        # files to AWS because its endpoint is fixed above to backblazeb2.com.
         "BACKEND": "storages.backends.s3.S3Storage",
-        "OPTIONS": s3_options,
+        "OPTIONS": b2_options,
     }
 elif IS_PRODUCTION:
     raise ImproperlyConfigured(
-        "Persistent media storage is required in production. Set "
-        "AWS_STORAGE_BUCKET_NAME (and S3-compatible credentials/endpoint)."
+        "Persistent Backblaze B2 media storage is required in production. Set "
+        "B2_BUCKET_NAME, B2_APPLICATION_KEY_ID, B2_APPLICATION_KEY, and B2_REGION."
     )
 
 

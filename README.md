@@ -76,7 +76,7 @@ Production uses three independent services:
 
 - Vercel runs Django and serves collected static assets through WhiteNoise.
 - A managed PostgreSQL service stores users, sessions, and booking data.
-- An S3-compatible bucket stores uploaded profile images.
+- A Backblaze B2 bucket stores uploaded profile images.
 
 SQLite and local uploaded files are not suitable for Vercel Functions. The
 runtime filesystem is ephemeral/read-only outside its temporary directory, and
@@ -88,8 +88,9 @@ Do this before connecting the repository to Vercel. Treat every credential
 that has ever appeared in `.env`, Django settings, `db.sqlite3`, uploaded media,
 terminal output, or Git history as compromised:
 
-1. Revoke and reissue the Django secret, database credentials, AWS/S3 and SES
-   keys, Duffel and Amadeus keys, Brevo key, and any other provider credential.
+1. Revoke and reissue the Django secret, database credentials, Backblaze B2 and
+   AWS/SES keys, Duffel and Amadeus keys, Brevo key, and any other provider
+   credential.
 2. Put only the new values in Vercel environment variables or a local ignored
    `.env`; never commit them.
 3. Remove the currently tracked database and uploads while retaining local
@@ -128,38 +129,51 @@ provider's pooling guidance; a transaction pooler may require
 Use a separate database for Preview deployments. Never point untrusted preview
 branches at production customer data.
 
-### 3. Provision S3-compatible media storage
+### 3. Provision Backblaze B2 media storage
 
-Create a private bucket and a least-privilege credential that can read, write,
-and delete objects only in that bucket. Prefer the storage-specific credential
-names below so email/SES credentials can remain separate:
+Create a private [Backblaze B2 bucket](https://www.backblaze.com/docs/cloud-storage-buckets)
+in a suitable region. Then create a manually generated, bucket-restricted
+[application key](https://www.backblaze.com/docs/cloud-storage-s3-compatible-app-keys);
+the B2 master application key is not supported by the S3-compatible API. The
+application needs the `listFiles`, `readFiles`, `writeFiles`, and `deleteFiles`
+capabilities. A bucket-restricted key may also need `listAllBucketNames` so the
+SDK can perform `List Buckets` or `Head Bucket` requests.
+
+Set these environment variables in Vercel:
 
 ```env
-USE_S3_STORAGE=True
-AWS_STORAGE_BUCKET_NAME=
-AWS_STORAGE_ACCESS_KEY_ID=
-AWS_STORAGE_SECRET_ACCESS_KEY=
-AWS_S3_REGION_NAME=
-AWS_S3_ENDPOINT_URL=
-AWS_S3_CUSTOM_DOMAIN=
-AWS_QUERYSTRING_AUTH=True
-AWS_S3_FILE_OVERWRITE=False
+USE_B2_STORAGE=True
+B2_BUCKET_NAME=
+B2_APPLICATION_KEY_ID=
+B2_APPLICATION_KEY=
+B2_REGION=us-east-005
+B2_ENDPOINT_URL=
+B2_MEDIA_LOCATION=media
+B2_QUERYSTRING_AUTH=True
+B2_QUERYSTRING_EXPIRE=3600
+B2_FILE_OVERWRITE=False
+B2_ADDRESSING_STYLE=path
+B2_CUSTOM_DOMAIN=
 ```
 
-For AWS S3, `AWS_S3_ENDPOINT_URL` is normally omitted. For Cloudflare R2 or
-another compatible service, set the provider endpoint and its required region
-or addressing style. `AWS_S3_CUSTOM_DOMAIN` is optional and should be a host
-name without `https://`. Keep signed URLs enabled for a private bucket; disable
-them only after intentionally configuring public/CDN access.
+`B2_APPLICATION_KEY_ID` is the S3 access-key equivalent and
+`B2_APPLICATION_KEY` is the secret-key equivalent. When `B2_ENDPOINT_URL` is
+blank, the application derives `https://s3.<B2_REGION>.backblazeb2.com`; if set,
+it must match that HTTPS endpoint exactly. The project uses django-storages'
+S3-compatible client, but the endpoint is locked to Backblaze and does not send
+media to AWS. See the official
+[django-storages Backblaze guide](https://django-storages.readthedocs.io/en/1.14.6/backends/s3_compatible/backblaze-B2.html).
 
-`AWS_STORAGE_SESSION_TOKEN`, `AWS_DEFAULT_ACL`, and
-`AWS_S3_ADDRESSING_STYLE` are also supported when required by the provider.
-Supplying `AWS_STORAGE_BUCKET_NAME` automatically enables S3 storage. Production
-startup fails if persistent media storage is missing rather than silently
-writing uploads to an ephemeral filesystem.
+Backblaze applies access control at bucket level, so the application never sets
+per-object ACLs. The recommended private-bucket configuration keeps
+`B2_QUERYSTRING_AUTH=True` and generates expiring signed URLs. Only set it to
+`False` and configure `B2_CUSTOM_DOMAIN` after intentionally making the bucket
+public and routing that host through a compatible CDN.
 
-Use a separate bucket or at least an isolated prefix/account for Preview
-deployments.
+Set `USE_B2_STORAGE=True` to enable B2 storage. Production startup fails if B2
+storage is disabled or its required configuration is missing rather than
+silently writing uploads to an ephemeral filesystem. Use a separate bucket or
+at least an isolated prefix/application key for Preview deployments.
 
 ### 4. Configure Vercel environment variables
 
@@ -173,9 +187,19 @@ SECRET_KEY=
 DATABASE_URL=
 ALLOWED_HOSTS=booking.example.com
 CSRF_TRUSTED_ORIGINS=https://booking.example.com
-AWS_STORAGE_BUCKET_NAME=
-AWS_STORAGE_ACCESS_KEY_ID=
-AWS_STORAGE_SECRET_ACCESS_KEY=
+USE_B2_STORAGE=True
+B2_BUCKET_NAME=
+B2_APPLICATION_KEY_ID=
+B2_APPLICATION_KEY=
+B2_REGION=
+EMAIL_BACKEND=django_ses.SESBackend
+EMAIL_HOST_USER=verified-sender@example.com
+DEFAULT_FROM_EMAIL=verified-sender@example.com
+SERVER_EMAIL=verified-sender@example.com
+AWS_SES_ACCESS_KEY_ID=
+AWS_SES_SECRET_ACCESS_KEY=
+AWS_SES_REGION_NAME=eu-north-1
+AWS_SES_REGION_ENDPOINT=email.eu-north-1.amazonaws.com
 ```
 
 Generate `SECRET_KEY` with a cryptographically secure password generator or
@@ -203,10 +227,14 @@ Increase HSTS to a long duration and opt into subdomains/preload only after
 confirming that every affected host will remain HTTPS-only. Production mode
 forces `DEBUG=False` even if it is accidentally configured otherwise.
 
-Configure at least one email backend before testing approval notifications.
-The default Brevo backend uses `BREVO_API_KEY`, `BREVO_SENDER_EMAIL`, and
-optionally `BREVO_SENDER_NAME`. If SES is the fallback, configure its region and
-credentials separately. Provider credentials for live flight/hotel search are
+Production uses [django-ses](https://github.com/django-ses/django-ses) and Amazon
+SES by default. Use an SES-specific IAM key with permission to send email, set
+`EMAIL_HOST_USER`, `DEFAULT_FROM_EMAIL`, and `SERVER_EMAIL` to a sender identity
+verified in the configured SES region, and use `AWS_SES_SESSION_TOKEN` only for
+temporary credentials. New SES accounts must leave the sandbox before sending
+to arbitrary recipients. Brevo remains available as an explicit alternative by
+setting `EMAIL_BACKEND=demo.brevo_email_backend.BrevoEmailBackend` and its
+`BREVO_*` variables. Provider credentials for live flight/hotel search are
 optional unless their corresponding live provider is enabled.
 
 Set sensitive values independently for Production, Preview, and Development.
