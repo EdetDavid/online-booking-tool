@@ -1,8 +1,11 @@
 from django.contrib.auth import get_user_model
+from django.apps import apps as django_apps
+from django.db import connection
 from django.test import Client, TestCase
 from django.urls import reverse
 from datetime import date
 from decimal import Decimal
+from importlib import import_module
 from unittest.mock import patch
 
 import json
@@ -70,6 +73,31 @@ class BookingCartTests(TestCase):
         self.client.force_login(user)
         return user
 
+    def round_trip_flight_data(self):
+        payload = json.loads(json.dumps(self.flight_data))
+        payload["id"] = "CART-ROUND-TRIP-1"
+        payload["tripType"] = "round-trip"
+        payload["itineraries"].append(
+            {
+                "duration": "PT7H",
+                "segments": [
+                    {
+                        "departure": {
+                            "iataCode": "JFK",
+                            "at": "2026-07-20T22:00:00",
+                        },
+                        "arrival": {
+                            "iataCode": "LOS",
+                            "at": "2026-07-21T05:00:00",
+                        },
+                        "carrierCode": "B6",
+                        "duration": "PT7H",
+                    }
+                ],
+            }
+        )
+        return payload
+
     def create_flight_request(self, user, **overrides):
         staff = Staff.objects.get(staff=user)
         values = {
@@ -136,6 +164,135 @@ class BookingCartTests(TestCase):
         self.assertContains(response, "Harbour View Hotel")
         self.assertContains(response, "1,050,000")
 
+    def test_round_trip_cart_uses_outbound_route_and_return_departure_date(self):
+        flight_data = self.round_trip_flight_data()
+
+        response = self.client.post(
+            reverse("cart_add_flight"),
+            {"flight_data": json.dumps(flight_data)},
+        )
+
+        self.assertRedirects(response, reverse("cart_detail"))
+        summary = self.client.session["booking_cart"]["items"][0]["summary"]
+        self.assertEqual(summary["origin"], "LOS")
+        self.assertEqual(summary["destination"], "JFK")
+        self.assertEqual(summary["departure_date"], "2026-07-10")
+        self.assertEqual(summary["return_date"], "2026-07-20")
+        self.assertEqual(summary["departure_time"], "09:00")
+        self.assertEqual(summary["arrival_time"], "15:00")
+
+        cart_response = self.client.get(reverse("cart_detail"))
+        self.assertContains(cart_response, "LOS to JFK")
+        self.assertNotContains(cart_response, "LOS to LOS")
+
+    def test_multi_city_cart_keeps_the_final_arrival_as_the_trip_end(self):
+        flight_data = self.round_trip_flight_data()
+        flight_data["id"] = "CART-MULTI-CITY-1"
+        flight_data["tripType"] = "multi-city"
+        outbound_segment = flight_data["itineraries"][0]["segments"][0]
+        final_segment = flight_data["itineraries"][1]["segments"][0]
+        outbound_segment["arrival"]["iataCode"] = "ACC"
+        final_segment["departure"]["iataCode"] = "ACC"
+        final_segment["arrival"]["iataCode"] = "JFK"
+
+        self.client.post(
+            reverse("cart_add_flight"),
+            {"flight_data": json.dumps(flight_data)},
+        )
+
+        summary = self.client.session["booking_cart"]["items"][0]["summary"]
+        self.assertEqual(summary["origin"], "LOS")
+        self.assertEqual(summary["destination"], "JFK")
+        self.assertEqual(summary["arrival_time"], "05:00")
+        self.assertEqual(summary["return_date"], "2026-07-21")
+        self.assertEqual(summary["trip_type"], "Multi City")
+
+    def test_cart_repairs_a_stale_round_trip_summary_in_the_session(self):
+        user = self.login_staff()
+        flight_data = self.round_trip_flight_data()
+        self.client.post(
+            reverse("cart_add_flight"),
+            {"flight_data": json.dumps(flight_data)},
+        )
+        original_item = self.client.session["booking_cart"]["items"][0]
+        flight_request = self.create_flight_request(
+            user,
+            return_date=date(2026, 7, 20),
+            booking_payload=flight_data,
+        )
+        session = self.client.session
+        session["booking_cart"]["items"][0]["summary"].update(
+            {
+                "destination": "LOS",
+                "arrival_time": "05:00",
+                "return_date": "2026-07-21",
+            }
+        )
+        session.save()
+
+        response = self.client.get(reverse("cart_detail"))
+
+        flight_items = [
+            item for item in response.context["cart_items"] if item["type"] == "flight"
+        ]
+        self.assertEqual(len(flight_items), 1)
+        self.assertEqual(flight_items[0]["cart_state"], "pending")
+        self.assertEqual(flight_items[0]["flight_request_id"], flight_request.pk)
+        summary = flight_items[0]["summary"]
+        self.assertEqual(summary["destination"], "JFK")
+        self.assertEqual(summary["arrival_time"], "15:00")
+        self.assertEqual(summary["return_date"], "2026-07-20")
+        stored_item = self.client.session["booking_cart"]["items"][0]
+        stored_summary = stored_item["summary"]
+        self.assertEqual(stored_summary["destination"], "JFK")
+        self.assertEqual(stored_summary["return_date"], "2026-07-20")
+        self.assertEqual(stored_item["id"], original_item["id"])
+        self.assertEqual(stored_item["payload"], original_item["payload"])
+        self.assertEqual(stored_summary["price"], original_item["summary"]["price"])
+        self.assertEqual(stored_item["flight_request_id"], flight_request.pk)
+
+    def test_route_data_migration_repairs_only_a_legacy_round_trip(self):
+        user = self.login_staff()
+        flight_data = self.round_trip_flight_data()
+        legacy_request = self.create_flight_request(
+            user,
+            destination="LOS",
+            return_date=date(2026, 7, 21),
+            booking_payload=flight_data,
+        )
+        multi_city_payload = self.round_trip_flight_data()
+        multi_city_payload["tripType"] = "multi-city"
+        multi_city_request = self.create_flight_request(
+            user,
+            origin="ACC",
+            destination="MANUAL",
+            departure_date=date(2026, 8, 1),
+            return_date=date(2026, 8, 9),
+            booking_payload=multi_city_payload,
+            price=Decimal("900000.00"),
+        )
+        migration = import_module(
+            "demo.migrations.0013_correct_flight_route_details"
+        )
+        schema_editor = type(
+            "SchemaEditor",
+            (),
+            {"connection": connection},
+        )()
+
+        migration.correct_flight_route_details(django_apps, schema_editor)
+        migration.correct_flight_route_details(django_apps, schema_editor)
+
+        legacy_request.refresh_from_db()
+        self.assertEqual(legacy_request.destination, "JFK")
+        self.assertEqual(legacy_request.return_date, date(2026, 7, 20))
+        self.assertEqual(legacy_request.booking_payload, flight_data)
+        multi_city_request.refresh_from_db()
+        self.assertEqual(multi_city_request.origin, "ACC")
+        self.assertEqual(multi_city_request.destination, "MANUAL")
+        self.assertEqual(multi_city_request.departure_date, date(2026, 8, 1))
+        self.assertEqual(multi_city_request.return_date, date(2026, 8, 9))
+
     def test_cart_item_can_be_removed_and_cart_cleared(self):
         self.client.post(
             reverse("cart_add_flight"),
@@ -178,6 +335,27 @@ class BookingCartTests(TestCase):
         self.assertEqual(items[0]["payload"], self.flight_data)
         self.assertEqual(items[0]["flight_request_id"], flight_request.pk)
         self.assertFalse(flight_request.approved)
+        mock_pending_email.assert_called_once()
+
+    @patch("demo.views.send_flight_pending_email")
+    def test_round_trip_booking_persists_the_outbound_destination(
+        self,
+        mock_pending_email,
+    ):
+        user = self.login_staff()
+        flight_data = self.round_trip_flight_data()
+
+        response = self.client.post(
+            reverse("book_flight"),
+            {"flight_data": json.dumps(flight_data)},
+        )
+
+        self.assertRedirects(response, reverse("cart_detail"))
+        flight_request = Flight_model.objects.get(user=user)
+        self.assertEqual(flight_request.origin, "LOS")
+        self.assertEqual(flight_request.destination, "JFK")
+        self.assertEqual(flight_request.departure_date.isoformat(), "2026-07-10")
+        self.assertEqual(flight_request.return_date.isoformat(), "2026-07-20")
         mock_pending_email.assert_called_once()
 
     @patch("demo.views.send_flight_pending_email")

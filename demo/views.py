@@ -21,7 +21,7 @@ from django.urls import reverse
 from django.utils.http import url_has_allowed_host_and_scheme
 from django.utils import timezone
 from django.views.decorators.cache import never_cache
-from .flight import Flight, flight_price_naira
+from .flight import Flight, flight_price_naira, flight_route_details
 from .duffel import DuffelAPIError, airport_suggestions, search_flights as duffel_flight_search
 from .booking import Booking
 from .cart import (
@@ -1292,12 +1292,15 @@ def book_flight(request):
                 else "one-way",
             )
         )
-        origin = flight_data['itineraries'][0]['segments'][0]['departure']['iataCode']
-        destination = flight_data['itineraries'][-1]['segments'][-1]['arrival']['iataCode']
-        departure_date = flight_data['itineraries'][0]['segments'][0]['departure']['at'].split('T')[
-            0]
-        return_date = flight_data['itineraries'][-1]['segments'][-1]['arrival']['at'].split(
-            'T')[0] if trip_type in {'round-trip', 'multi-city'} and len(flight_data['itineraries']) > 1 else None
+        route = flight_route_details(flight_data, trip_type=trip_type)
+        origin = route['origin']
+        destination = route['destination']
+        departure_date = route['departure_at'].split('T')[0]
+        return_date = (
+            route['return_at'].split('T')[0]
+            if route['return_at']
+            else None
+        )
         passenger_count = len(flight_data['travelerPricings'])
         travel_class = flight_data['travelerPricings'][0]['fareDetailsBySegment'][0]['cabin']
         staff_profile = staff_profile_for_user(request.user)
@@ -1374,6 +1377,22 @@ def book_flight(request):
         else:
             flight_request = existing_flight
             changed_fields = []
+            canonical_fields = {
+                'origin': origin,
+                'destination': destination,
+                'departure_date': departure_date,
+                'return_date': return_date,
+            }
+            for field_name, canonical_value in canonical_fields.items():
+                current_value = getattr(flight_request, field_name)
+                comparable_value = (
+                    current_value.isoformat()
+                    if hasattr(current_value, 'isoformat')
+                    else current_value
+                )
+                if comparable_value != canonical_value:
+                    setattr(flight_request, field_name, canonical_value)
+                    changed_fields.append(field_name)
             if staff_profile and not flight_request.requested_by_staff_id:
                 flight_request.requested_by_staff = staff_profile
                 changed_fields.append('requested_by_staff')

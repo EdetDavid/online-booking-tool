@@ -180,6 +180,94 @@ def get_cabin(flight):
         return 'ECONOMY'
 
 
+def flight_route_details(flight, trip_type=None):
+    """Return the logical route and dates for an offer.
+
+    A round trip's final itinerary arrives back at the origin, so its logical
+    destination comes from the outbound itinerary. Multi-city trips, on the
+    other hand, end at the final itinerary's arrival.
+    """
+    if not isinstance(flight, dict):
+        raise ValueError('Flight data must be an object.')
+
+    itineraries = flight.get('itineraries') or []
+    if not isinstance(itineraries, list) or not itineraries:
+        raise ValueError('Flight data does not contain an itinerary.')
+    if not all(isinstance(itinerary, dict) for itinerary in itineraries):
+        raise ValueError('Flight data contains an invalid itinerary.')
+
+    outbound_segments = itineraries[0].get('segments') or []
+    final_segments = itineraries[-1].get('segments') or []
+    if (
+        not isinstance(outbound_segments, list)
+        or not isinstance(final_segments, list)
+        or not outbound_segments
+        or not final_segments
+        or not all(isinstance(segment, dict) for segment in outbound_segments)
+        or not all(isinstance(segment, dict) for segment in final_segments)
+    ):
+        raise ValueError('Flight itinerary does not contain any segments.')
+
+    normalized_trip_type = str(
+        trip_type
+        or flight.get('tripType')
+        or ('round-trip' if len(itineraries) > 1 else 'one-way')
+    ).strip().lower()
+    if normalized_trip_type not in {'one-way', 'round-trip', 'multi-city'}:
+        normalized_trip_type = 'round-trip' if len(itineraries) > 1 else 'one-way'
+
+    outbound_first = outbound_segments[0]
+    outbound_last = outbound_segments[-1]
+    final_first = final_segments[0]
+    final_last = final_segments[-1]
+    route_arrival = final_last if normalized_trip_type == 'multi-city' else outbound_last
+    return_departure = (
+        final_first
+        if normalized_trip_type == 'round-trip' and len(itineraries) > 1
+        else None
+    )
+
+    outbound_departure = outbound_first.get('departure')
+    route_arrival_details = route_arrival.get('arrival')
+    if not isinstance(outbound_departure, dict) or not isinstance(
+        route_arrival_details,
+        dict,
+    ):
+        raise ValueError('Flight itinerary contains an invalid route endpoint.')
+
+    origin = str(outbound_departure.get('iataCode') or '').strip().upper()
+    destination = str(route_arrival_details.get('iataCode') or '').strip().upper()
+    departure_at = str(outbound_departure.get('at') or '').strip()
+    arrival_at = str(route_arrival_details.get('at') or '').strip()
+    if not all((origin, destination, departure_at, arrival_at)):
+        raise ValueError('Flight itinerary is missing required route details.')
+
+    return_at = ''
+    if return_departure:
+        return_departure_details = return_departure.get('departure')
+        if not isinstance(return_departure_details, dict):
+            raise ValueError('Flight itinerary contains an invalid return endpoint.')
+        return_at = str(
+            return_departure_details.get('at') or ''
+        ).strip()
+        if not return_at:
+            raise ValueError('Flight itinerary is missing its return departure date.')
+    elif normalized_trip_type == 'multi-city' and len(itineraries) > 1:
+        # Preserve the existing multi-city meaning: this field represents the
+        # end of the final itinerary, rather than a return departure.
+        return_at = arrival_at
+
+    return {
+        'trip_type': normalized_trip_type,
+        'origin': origin,
+        'destination': destination,
+        'departure_at': departure_at,
+        'arrival_at': arrival_at,
+        'return_at': return_at,
+        'legs': len(itineraries),
+    }
+
+
 def leg_label(trip_type, index):
     if trip_type == 'round-trip':
         return 'Depart' if index == 0 else 'Return'

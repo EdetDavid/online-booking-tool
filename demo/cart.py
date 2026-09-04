@@ -6,7 +6,7 @@ from decimal import Decimal, InvalidOperation
 
 from django.db.models import Q
 
-from .flight import flight_price_naira
+from .flight import flight_price_naira, flight_route_details
 from .models import Flight_model
 from .pricing import exchange_rate_for_user
 
@@ -30,13 +30,27 @@ def visible_cart_items(request):
 
     stored_items = cart_items(request)
     items = []
-    for stored_item in stored_items:
+    session_metadata_changed = False
+    for item_index, stored_item in enumerate(stored_items):
         item = dict(stored_item)
         item["session_backed"] = True
         item["removable"] = True
         if item.get("type") == "flight":
             item["cart_state"] = "saved"
             item["bookable"] = bool(item.get("payload"))
+            payload = item.get("payload")
+            if isinstance(payload, dict):
+                try:
+                    current_summary = dict(item.get("summary") or {})
+                    corrected_summary = dict(current_summary)
+                    corrected_summary.update(_flight_route_summary_fields(payload))
+                except (IndexError, KeyError, TypeError, ValueError):
+                    pass
+                else:
+                    if corrected_summary != current_summary:
+                        item["summary"] = corrected_summary
+                        stored_items[item_index]["summary"] = corrected_summary
+                        session_metadata_changed = True
         items.append(item)
 
     explicit_request_ids = {
@@ -59,7 +73,6 @@ def visible_cart_items(request):
         )
 
     matched_request_ids = set()
-    session_metadata_changed = False
     for item_index, item in enumerate(items):
         if item.get("type") != "flight":
             continue
@@ -225,16 +238,7 @@ def clear_cart(request):
 
 def flight_summary(flight_data, exchange_rate=None):
     itineraries = flight_data.get("itineraries") or []
-    first_itinerary = itineraries[0]
-    first_segments = first_itinerary.get("segments") or []
-    first_segment = first_segments[0]
-    final_itinerary = itineraries[-1]
-    final_segments = final_itinerary.get("segments") or []
-    last_trip_segment = final_segments[-1]
-    trip_type = flight_data.get(
-        "tripType",
-        "round-trip" if len(itineraries) > 1 else "one-way",
-    )
+    route_summary = _flight_route_summary_fields(flight_data)
 
     traveler_pricings = flight_data.get("travelerPricings") or []
     cabin = "ECONOMY"
@@ -242,12 +246,6 @@ def flight_summary(flight_data, exchange_rate=None):
         fare_details = traveler_pricings[0].get("fareDetailsBySegment") or []
         if fare_details:
             cabin = fare_details[0].get("cabin") or cabin
-
-    return_date = ""
-    if trip_type in {"round-trip", "multi-city"} and final_segments:
-        return_date = (
-            last_trip_segment.get("arrival", {}).get("at", "").split("T")[0]
-        )
 
     total_naira = flight_price_naira(
         flight_data,
@@ -265,24 +263,27 @@ def flight_summary(flight_data, exchange_rate=None):
                 airlines.append(carrier)
 
     return {
-        "origin": first_segment.get("departure", {}).get("iataCode", ""),
-        "destination": last_trip_segment.get("arrival", {}).get("iataCode", ""),
-        "departure_date": first_segment.get("departure", {}).get("at", "").split("T")[0],
-        "departure_time": _time_part(
-            first_segment.get("departure", {}).get("at", "")
-        ),
-        "arrival_time": _time_part(
-            last_trip_segment.get("arrival", {}).get("at", "")
-        ),
-        "return_date": return_date,
+        **route_summary,
         "passengers": max(len(traveler_pricings), 1),
         "cabin": cabin.replace("_", " ").title(),
         "price": f"{total_naira.quantize(Decimal('1')):,}",
         "airlines": ", ".join(airlines) or "Airline",
         "stops": stops,
         "source": flight_data.get("source", "LIVE_FLIGHT_API"),
-        "trip_type": trip_type.replace("-", " ").title(),
-        "legs": len(itineraries),
+    }
+
+
+def _flight_route_summary_fields(flight_data):
+    route = flight_route_details(flight_data)
+    return {
+        "origin": route["origin"],
+        "destination": route["destination"],
+        "departure_date": route["departure_at"].split("T")[0],
+        "departure_time": _time_part(route["departure_at"]),
+        "arrival_time": _time_part(route["arrival_at"]),
+        "return_date": route["return_at"].split("T")[0],
+        "trip_type": route["trip_type"].replace("-", " ").title(),
+        "legs": route["legs"],
     }
 
 
